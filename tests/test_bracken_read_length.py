@@ -17,7 +17,7 @@ def block():
     return MOD[start:end]
 
 
-def run(lengths, db_lengths, setting="auto"):
+def run(lengths, db_lengths, setting="auto", prepare=None):
     d = tempfile.mkdtemp()
     db = Path(d, "db"); db.mkdir()
     for L in db_lengths:
@@ -25,9 +25,13 @@ def run(lengths, db_lengths, setting="auto"):
     with open(Path(d, "S1.trimmed.fastq"), "w") as fh:
         for i, L in enumerate(lengths):
             fh.write(f"@r{i}\n{'A' * L}\n+\n{'I' * L}\n")
+    if prepare:
+        prepare(Path(d))
     sh = (block().replace("${params.kraken_db}", str(db)).replace("${SAMPLE_NAME}", "S1")
           .replace("${params.bracken_read_length}", str(setting)).replace("\\$", "$").replace("\\\\", "\\"))
-    r = subprocess.run(["bash", "-euc", sh], cwd=d, capture_output=True, text=True)
+    # -o pipefail: the module script enables it (review #22), so the extracted block must
+    # behave the same here.
+    r = subprocess.run(["bash", "-euo", "pipefail", "-c", sh], cwd=d, capture_output=True, text=True)
     out = Path(d, "S1.bracken_read_length.tsv")
     rows = [l.split("\t") for l in out.read_text().splitlines()] if out.exists() else None
     return r, (dict(zip(rows[0], rows[1])) if rows else None)
@@ -35,6 +39,23 @@ def run(lengths, db_lengths, setting="auto"):
 
 class BrackenReadLength(unittest.TestCase):
     DB = [50, 75, 100, 125, 150, 200, 250, 300]
+
+    def test_pipefail_is_enabled_in_both_modules(self):
+        """#22/#23: the switch must come before the first pipe of each script body."""
+        self.assertLess(MOD.index("set -o pipefail"), MOD.index("| sort"))
+        meta = (ROOT / "Modules" / "metaphlan4.nf").read_text()
+        self.assertIn("set -o pipefail", meta)
+        # head quits early and can kill its writer under pipefail (see the note in
+        # scripts/record_tool_versions.sh); no module pipe may end that way.
+        self.assertNotIn("| head", MOD)
+
+    def test_unreadable_input_fails_instead_of_median_zero(self):
+        """Before pipefail, the first awk's failure vanished in `awk | sort | awk`: the median
+        became 0 and Bracken silently got the 50-bp table for 150-bp reads. Now the block fails."""
+        r, row = run([151] * 9, self.DB,
+                     prepare=lambda d: os.chmod(d / "S1.trimmed.fastq", 0o000))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIsNone(row)
 
     def test_default_is_auto_and_validated(self):
         text = (ROOT / "main.nf").read_text()

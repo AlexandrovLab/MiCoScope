@@ -40,6 +40,10 @@ process Bracken {
     def inputs = read_files.collect { "\"${it}\"" }.join(' ')
 
     """
+    # A failing stage inside a pipeline must fail the task; bash judges a pipe by its last
+    # command alone (Ludmil review #22/#23). The bracken no-call block below manages its own
+    # errors with set +e/-e and contains no pipe, so it is unaffected.
+    set -o pipefail
 
     ${ToolVersions.record(task, params, 'krakenuniq bracken python')}
     KRAKEN_REPORT="${SAMPLE_NAME}.krakenuniq.report.txt"
@@ -74,7 +78,7 @@ process Bracken {
     # tests/test_bracken_read_length.py scans every module script for this.
     AVAILABLE=\$(ls "${params.kraken_db}" | sed -n 's/^database\\([0-9][0-9]*\\)mers\\.kmer_distrib\$/\\1/p' | sort -n | tr '\n' ' ')
     if [[ "${params.bracken_read_length}" == "auto" ]]; then
-        BRACKEN_LEN=\$(for L in \$AVAILABLE; do d=\$(( L > MEDIAN_LEN ? L - MEDIAN_LEN : MEDIAN_LEN - L )); echo "\$d \$L"; done | sort -n -k1,1 -k2,2 | head -1 | cut -d' ' -f2)
+        BRACKEN_LEN=\$(for L in \$AVAILABLE; do d=\$(( L > MEDIAN_LEN ? L - MEDIAN_LEN : MEDIAN_LEN - L )); echo "\$d \$L"; done | sort -n -k1,1 -k2,2 | awk 'NR==1{print \$2}')
         LEN_MODE=auto
     else
         BRACKEN_LEN=${params.bracken_read_length}

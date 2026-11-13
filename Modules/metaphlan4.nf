@@ -32,6 +32,9 @@ process metaphlan4 {
     def inputs = read_files.collect { "\"${it}\"" }.join(' ')
 
     """
+    # A failing stage inside a pipeline must fail the task (Ludmil review #22/#23). No pipe
+    # exists in this script today; the switch protects whatever is added later.
+    set -o pipefail
     # The [DEBUG] PATH / which / --version echo that was here is replaced by the tool-version record.
     ${ToolVersions.record(task, params, 'metaphlan bowtie2')}
     out1="${SAMPLE_NAME}.metagenome.bowtie2.bz2"
