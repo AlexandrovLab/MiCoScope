@@ -62,7 +62,10 @@ class ExtractionRecordsTheFloor(unittest.TestCase):
         # Nextflow's env(INPUT_QC_FLOOR) output reads the variable after the script; do the same.
         (work / ".command.sh").write_text(script + '\necho "$INPUT_QC_FLOOR" > .floor\n')
         env = {"PATH": f"{LSRT.SAMTOOLS_BIN}:/usr/bin:/bin", "HOME": str(tmp), "LC_ALL": "C"}
-        r = subprocess.run(["bash", ".command.sh"], cwd=work, env=env, capture_output=True, text=True)
+        # errors="replace", as in LSRT.run_module: an undecodable stderr byte must not replace the
+        # real failure with a UnicodeDecodeError (#25).
+        r = subprocess.run(["bash", ".command.sh"], cwd=work, env=env, capture_output=True,
+                           encoding="utf-8", errors="replace")
         self.assertEqual(r.returncode, 0, r.stderr[-2000:])
         counts = LSRT.read_tsv_row(work / "S.extract_counts.tsv")
         return counts, (work / ".floor").read_text().strip(), r.stderr

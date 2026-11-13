@@ -57,7 +57,14 @@ def find_samtools_bin():
         d = Path(directory)
         if not all((d / tool).is_file() for tool in ("samtools", "htsfile", "bgzip")):
             continue
-        out = subprocess.run([str(d / "samtools"), "--version"], capture_output=True, text=True).stdout
+        # A broken candidate must reject itself, never kill the import: decode whatever it prints
+        # as UTF-8 with replacement (a strict locale decode raised UnicodeDecodeError here), and
+        # treat "cannot even run" the same as "wrong version" (Ludmil review #25).
+        try:
+            out = subprocess.run([str(d / "samtools"), "--version"], capture_output=True,
+                                 encoding="utf-8", errors="replace").stdout
+        except OSError:
+            continue
         m = re.match(r"samtools (\d+)\.(\d+)", out)
         if m and (int(m.group(1)), int(m.group(2))) >= (1, 16):
             return d
@@ -65,6 +72,53 @@ def find_samtools_bin():
 
 
 SAMTOOLS_BIN = find_samtools_bin()
+
+
+class SamtoolsProbe(unittest.TestCase):
+    """find_samtools_bin() must reject a broken candidate, never die importing this module (#25).
+
+    Both fakes are synthetic shell scripts written here; no real samtools is involved.
+    """
+
+    def probe_with_candidate(self, make_dir):
+        tmp = self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        make_dir(tmp)
+        old = os.environ.get("CMP_TEST_SAMTOOLS_BIN")
+        os.environ["CMP_TEST_SAMTOOLS_BIN"] = str(tmp)
+        try:
+            found = find_samtools_bin()
+        finally:
+            if old is None:
+                os.environ.pop("CMP_TEST_SAMTOOLS_BIN", None)
+            else:
+                os.environ["CMP_TEST_SAMTOOLS_BIN"] = old
+        return found
+
+    @staticmethod
+    def fake_bin(tmp, version_bytes):
+        exe = tmp / "samtools"
+        exe.write_bytes(b"#!/bin/sh\nprintf '" + version_bytes + b"\\n'\n")
+        exe.chmod(0o755)
+        for other in ("htsfile", "bgzip"):
+            (tmp / other).write_text("#!/bin/sh\nexit 0\n")
+            (tmp / other).chmod(0o755)
+
+    def test_pure_garbage_output_rejects_the_candidate(self):
+        found = self.probe_with_candidate(lambda tmp: self.fake_bin(tmp, b"\\200\\201 broken"))
+        self.assertNotEqual(found, self.tmp)   # rejected, and the import survived
+
+    def test_version_line_with_trailing_garbage_still_parses(self):
+        found = self.probe_with_candidate(lambda tmp: self.fake_bin(tmp, b"samtools 1.21 \\200"))
+        self.assertEqual(found, self.tmp)      # the readable version wins over the noise
+
+    def test_non_executable_candidate_is_skipped(self):
+        def make(tmp):
+            for name in ("samtools", "htsfile", "bgzip"):
+                (tmp / name).write_text("not a program")   # present but not executable
+        found = self.probe_with_candidate(make)
+        self.assertNotEqual(found, self.tmp)
+
 
 # ------------------------------------------------------------------ synthetic alignments
 
@@ -211,7 +265,10 @@ class ExtractionOnSyntheticAlignments(unittest.TestCase):
         work.mkdir()
         (work / ".command.sh").write_text(render_script(mode, str(alignment), reference, kind))
         env = {"PATH": f"{SAMTOOLS_BIN}:/usr/bin:/bin", "HOME": str(tmp), "LC_ALL": "C"}
-        result = subprocess.run(["bash", ".command.sh"], cwd=work, env=env, capture_output=True, text=True)
+        # errors="replace": a stray undecodable byte in the script's stderr must not replace the
+        # real failure (assertion with exit code + diagnostic) with a UnicodeDecodeError (#25).
+        result = subprocess.run(["bash", ".command.sh"], cwd=work, env=env, capture_output=True,
+                                encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, 0, result.stderr[-2000:])
         self.assertEqual(result.stdout, "", "nothing may be written to the task's stdout (.command.out)")
         out = {
