@@ -4,6 +4,12 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **Validation reports support-to-estimate ratios (review #3/#16/#17).** `validation_stats.all.tsv` gains
+  `support_to_bracken_ratio` and `unique_to_bracken_ratio` (supporting / unique reads over the row's
+  Bracken estimate; NA at estimate 0). Reporting only — no status changes. minimap2's alternative-alignment
+  cap becomes `--validation_minimap_n` (default 100, unchanged) so the agreed 100/200/500 sweep and the
+  95/98/99% identity sweep can run as parameters inside the CRC50 regression.
+
 - **"Microbial" now means bacteria + archaea + fungi + protozoa (review #14/#21; 16 Nov 2026).** The
   MetaPhlAn gate and the QC summary's `bracken_microbial_reads` sum the KrakenUniq clade counts of the
   taxids in `conf/microbial_scope_taxids.tsv` (`--microbial_scope`): mutually non-nested clades matching the

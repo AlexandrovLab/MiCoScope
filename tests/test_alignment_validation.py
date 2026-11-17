@@ -70,6 +70,20 @@ class Scorer(unittest.TestCase):
         # without grouping, E. coli and Shigella share every read: both fail as shadows
         self.assertEqual(rows["Esc_coli"]["status"], "failed")
 
+    def test_support_ratios_are_reported_never_gating(self):
+        """Review #3/#16/#17: supporting and unique reads relative to the Bracken estimate (100 per
+        taxon in this fixture). Columns only -- the statuses are asserted unchanged elsewhere."""
+        rows = self.run_score()
+        # 60 reads of Gen_a's own + 60 tied with the Gen_d shadow = 120 supporting / 100 estimated:
+        # the ratio exceeds 1 exactly because a tied read supports both taxa (the plan's warning
+        # that summed per-taxon support is not a count of distinct reads).
+        self.assertEqual(rows["Gen_a"]["support_to_bracken_ratio"], "1.2000")
+        self.assertEqual(rows["Gen_a"]["unique_to_bracken_ratio"], "0.6000")
+        self.assertEqual(rows["Gen_d"]["support_to_bracken_ratio"], "0.6000")   # the shadow: all shared
+        self.assertEqual(rows["Gen_d"]["unique_to_bracken_ratio"], "0.0000")
+        grouped = self.run_score("--groups", f"{self.d}/groups.tsv")
+        self.assertEqual(grouped["EscShi"]["support_to_bracken_ratio"], "0.3000")   # 60 / (100 + 100)
+
     def test_group_scores_members_as_one_taxon(self):
         rows = self.run_score("--groups", f"{self.d}/groups.tsv")
         self.assertIn("EscShi", rows)

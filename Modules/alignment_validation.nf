@@ -157,7 +157,7 @@ process alignForValidation {
     ${ToolVersions.record(task, params, 'minimap2 python')}
     {
         ${stream}
-    } | minimap2 -ax sr ${frag} -t ${task.cpus} -p 0.99 -N 100 --secondary=yes "${index}" /dev/stdin 2> minimap2.log \\
+    } | minimap2 -ax sr ${frag} -t ${task.cpus} -p 0.99 -N ${params.validation_minimap_n} --secondary=yes "${index}" /dev/stdin 2> minimap2.log \\
       | python "${params.scripts}/validation_score.py" \\
             --samples "${sample_ids.join(',')}" \\
             --contigs "${contig_labels}" \\

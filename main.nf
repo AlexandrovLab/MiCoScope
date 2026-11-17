@@ -190,6 +190,7 @@ params.validation_min_bins_ratio = 0.5    // 10 kb windows hit / expected (per r
 params.validation_min_identity = 0.98     // median 1 - NM/aligned columns
 params.validation_min_unique_frac = 0.05  // unique / (unique + shared) reads; 0.02 until 2026-09-30 (audit V01/V02)
 params.validation_bins_reads = 'unique'   // reads the bins test uses: unique (default) | all (2026-09-23 rule)
+params.validation_minimap_n = 100         // minimap2 -N: alternative alignments kept per read; the #16/#17 sweep varies it (100/200/500)
 params.validation_max_genomes = 50        // RefSeq genomes per species, before de-duplication
 params.validation_dedup_ani = 99.5        // skani ANI at which two genomes of a species are one
 params.validation_anchor_ani = 95         // species anchor cluster, and the bar a mislabelled genome must clear to move
@@ -469,6 +470,7 @@ workflow {
             error "--validation_bins_reads must be 'unique' or 'all' (got '${params.validation_bins_reads}')"
         }
         [validation_min_support: params.validation_min_support,
+         validation_minimap_n: params.validation_minimap_n,
          validation_min_confirmed: params.validation_min_confirmed,
          validation_max_genomes: params.validation_max_genomes,
          validation_batch_size: params.validation_batch_size].each { name, v ->

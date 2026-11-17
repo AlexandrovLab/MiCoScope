@@ -222,7 +222,14 @@ def main(argv=None):
 # supporting/unique/multi pool every genome of the taxon; breadth, bins and reads_on_best use the
 # best-supported genome only -- as the column names say.
 COLS = ["sample", "taxon", "members", "bracken_reads", "minimap2_count", "supporting_reads", "unique_reads",
-        "multi_reads", "unique_fraction", "best_genome", "reads_on_best", "genome_len",
+        "multi_reads", "unique_fraction",
+        # Support-to-estimate ratios (Ludmil review #3/#16/#17, reporting only -- NEVER a pass
+        # criterion): supporting and unique reads, each relative to the Bracken estimate the row is
+        # about. Bracken can estimate many reads where few align (ratio << 1, redistribution), and a
+        # read tied across species supports each of them, so summed support exceeds distinct reads.
+        # NA when the estimate is 0.
+        "support_to_bracken_ratio", "unique_to_bracken_ratio",
+        "best_genome", "reads_on_best", "genome_len",
         "observed_breadth", "expected_breadth", "breadth_ratio", "bins_hit", "bins_expected",
         "bins_ratio", "median_identity", "status", "fail_reason", "bins_reads", "reads_for_bins",
         "ani_group", "group_status", "group_fail_reason"]
@@ -321,6 +328,9 @@ class SampleScorer:
                        unique_reads=uniq[t], multi_reads=multi[t])
             sup = [(len(v), acc) for (tt, acc), v in support.items() if tt == t]
             row["supporting_reads"] = sum(n for n, _ in sup)
+            est = self.bracken[t]
+            row["support_to_bracken_ratio"] = f"{row['supporting_reads'] / est:.4f}" if est else "NA"
+            row["unique_to_bracken_ratio"] = f"{uniq[t] / est:.4f}" if est else "NA"
             tot = uniq[t] + multi[t]
             row["unique_fraction"] = f"{uniq[t] / tot:.4f}" if tot else "NA"
             fail = []

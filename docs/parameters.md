@@ -101,6 +101,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--validation_min_bins_ratio` | `0.5` | 10 kb windows hit / windows expected for that many read pairs |
 | `--validation_min_identity` | `0.98` | median alignment identity |
 | `--validation_min_unique_frac` | `0.05` | reads unique to the species / all its reads (0.02 until 2026-09-30) |
+| `--validation_minimap_n` | `100` | minimap2 `-N` in validation; the #16/#17 sweep varies 100/200/500 |
 | `--validation_bins_reads` | `unique` | reads the bins test is computed on: `unique` (reads not shared with another species) or `all` (the 2026-09-23 rule). Shared reads pile into regions conserved with an abundant relative and failed truly present minor species (audit 2026-09-30, V01) |
 | `--validation_max_genomes` | `50` | RefSeq genomes per species, before de-duplication |
 | `--validation_dedup_ani` | `99.5` | skani ANI at which two genomes of a species count as one |

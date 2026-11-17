@@ -31,7 +31,12 @@ species table and on its genus roll-up.
    - needs internet on the compute node
 3. **Alignment.** Each sample's host-depleted reads, `--validation_batch_size` samples per task in one
    minimap2 stream, so the index loads once per batch.
-4. **Status** per sample x species, with every statistic in `06_VALIDATION/validation_stats.all.tsv`:
+4. **Status** per sample x species, with every statistic in `06_VALIDATION/validation_stats.all.tsv`.
+   `support_to_bracken_ratio` and `unique_to_bracken_ratio` report the supporting and unique reads
+   relative to the row's Bracken estimate (review #3/#16/#17): a ratio far below 1 means the estimate
+   rests mostly on statistical redistribution rather than aligned reads. Reporting only, never a pass
+   criterion, and NA when the estimate is 0; because one read can support several taxa, summed
+   per-taxon support must not be read as distinct reads. Statuses:
    - tested in this order: `unsupported` if Bracken gave it at least 25 reads but fewer than 10 align to
      it (`--validation_min_confirmed`; the cutoff PRISM uses; the reads are not this species');
      `insufficient` if fewer than 25 supporting reads over all its genomes;
@@ -92,6 +97,7 @@ also writes the reads supporting each validated taxon. Those are sample-derived 
 | `--validation_min_bins_ratio` | `0.5` | 10 kb windows hit / windows expected for that many read pairs |
 | `--validation_min_identity` | `0.98` | median alignment identity |
 | `--validation_min_unique_frac` | `0.05` | reads unique to the species / all its reads (0.02 until 2026-09-30) |
+| `--validation_minimap_n` | `100` | minimap2 `-N`: alternative alignments kept per read. The #16/#17 sweep varies 100/200/500; a cap that is too low can hide that a read also matches another species |
 | `--validation_bins_reads` | `unique` | reads the bins test is computed on: `unique` (reads not shared with another species) or `all` (the 2026-09-23 rule). Shared reads pile into regions conserved with an abundant relative and failed truly present minor species (audit 2026-09-30, V01) |
 | `--validation_max_genomes` | `50` | RefSeq genomes per species, before de-duplication |
 | `--validation_dedup_ani` | `99.5` | skani ANI at which two genomes of a species count as one |
