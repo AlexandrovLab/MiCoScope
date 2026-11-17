@@ -245,8 +245,8 @@ def read_tsv_row(path):
 class ExtractionOnSyntheticAlignments(unittest.TestCase):
     """The rendered extractReads script, run for real on synthetic BAM / CRAM."""
 
-    def build(self, tmp, pg, kind="bam"):
-        (tmp / "in.sam").write_text(sam_text(pg))
+    def build(self, tmp, pg, kind="bam", records=RECORDS):
+        (tmp / "in.sam").write_text(sam_text(pg, records))
         tool = str(SAMTOOLS_BIN / "samtools")
         if kind == "bam":
             subprocess.run([tool, "view", "-b", "-o", str(tmp / "in.bam"), str(tmp / "in.sam")], check=True)
@@ -257,10 +257,10 @@ class ExtractionOnSyntheticAlignments(unittest.TestCase):
                         str(tmp / "in.sam")], check=True)
         return tmp / "in.cram", str(tmp / "ref.fa")
 
-    def run_module(self, mode, pg, kind="bam"):
+    def run_module(self, mode, pg, kind="bam", records=RECORDS):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)
-        alignment, reference = self.build(tmp, pg, kind)
+        alignment, reference = self.build(tmp, pg, kind, records)
         work = tmp / "task"
         work.mkdir()
         (work / ".command.sh").write_text(render_script(mode, str(alignment), reference, kind))
@@ -293,7 +293,11 @@ class ExtractionOnSyntheticAlignments(unittest.TestCase):
         self.assertEqual(out["reads"], expected_reads(("flag4", "low")))
         self.assertEqual(out["counts"], {
             "sample": "S", "library_primary_records": str(PRIMARY),
+            "library_duplicate_records": "0", "library_qcfail_records": "0",
+            "library_dup_and_qcfail_records": "0",
             "extracted_unmapped_records": "5", "low_as_reads_extracted": "3", "low_as_no_as_records": "1",
+            "extracted_duplicate_reads": "0", "extracted_qcfail_reads": "0",
+            "extracted_dup_and_qcfail_reads": "0",
             "input_qc_floor": "pass"})
         self.assertEqual(out["aligner"]["low_as_mode"], "on")
         self.assertEqual(out["aligner"]["low_as_mode_reason"], "auto_bwa_mem_T_below_30")
@@ -362,6 +366,42 @@ class ExtractionOnSyntheticAlignments(unittest.TestCase):
         off = self.run_module("off", (PG_GDC,))
         self.assertEqual(off["reads"], expected_reads(("flag4",)))
         self.assertEqual(off["aligner"]["low_as_mode_reason"], "requested_off")
+
+    def test_duplicate_and_qcfail_flags_are_counted_never_excluded(self):
+        """Review #12: tallies for 0x400/0x200 on the library and the extracted reads; the flagged
+        reads still reach the FASTQ -- the inclusion policy is observed, not changed."""
+        flagged = [
+            ("plain_unm", 4, False, None, seq(40), "flag4"),
+            ("dup_unm", 4 + 1024, False, None, seq(41), "flag4"),
+            ("qcf_unm", 4 + 512, False, None, seq(42), "flag4"),
+            ("both_unm", 4 + 512 + 1024, False, None, seq(43), "flag4"),
+            ("dup_low", 1024, True, 10, seq(44), "low"),        # duplicate AND rescued (AS 10)
+            ("dup_kept", 1024, True, 50, seq(45), "excluded"),  # duplicate, well mapped: not extracted
+            ("qcf_kept", 512, True, 50, seq(46), "excluded"),
+        ]
+        for kind in ("bam", "cram"):
+            with self.subTest(kind=kind, mode="off"):
+                out = self.run_module("off", (PG_GDC,), kind=kind, records=flagged)
+                c = out["counts"]
+                self.assertEqual([c["library_primary_records"], c["library_duplicate_records"],
+                                  c["library_qcfail_records"], c["library_dup_and_qcfail_records"]],
+                                 ["7", "4", "3", "1"])
+                self.assertEqual([c["extracted_unmapped_records"], c["extracted_duplicate_reads"],
+                                  c["extracted_qcfail_reads"], c["extracted_dup_and_qcfail_reads"]],
+                                 ["4", "2", "2", "1"])
+                # the flagged reads are IN the output, unchanged
+                self.assertEqual({n for n, _, _ in out["reads"]},
+                                 {"plain_unm", "dup_unm", "qcf_unm", "both_unm"})
+        with self.subTest(mode="on"):
+            out = self.run_module("on", (PG_GDC,), records=flagged)
+            c = out["counts"]
+            self.assertEqual([c["extracted_unmapped_records"], c["low_as_reads_extracted"],
+                              c["extracted_duplicate_reads"], c["extracted_qcfail_reads"],
+                              c["extracted_dup_and_qcfail_reads"]],
+                             ["4", "1", "3", "2", "1"])
+            self.assertEqual([c["library_duplicate_records"], c["library_qcfail_records"]],
+                             ["4", "3"])
+            self.assertIn("dup_low", {n for n, _, _ in out["reads"]})
 
     def test_cram_with_reference(self):
         out = self.run_module("auto", (PG_GDC,), kind="cram")
@@ -614,7 +654,7 @@ class Wiring(unittest.TestCase):
 
     def test_one_decode_per_branch_with_cram_reference(self):
         on = MODULE[MODULE.index('if [[ "\\$LOW_AS" == "on" ]]'):MODULE.index("\n    else\n")]
-        off = MODULE[MODULE.index("\n    else\n"):MODULE.index("\n    fi\n    printf")]
+        off = MODULE[MODULE.index("\n    else\n"):MODULE.index("\n    fi\n    read -r PRIMARY_TOTAL")]
         for branch in (on, off):
             self.assertEqual(branch.count('"${alignment}"'), 1)
             self.assertIn("-F 2304", branch)
@@ -623,7 +663,9 @@ class Wiring(unittest.TestCase):
     def test_off_branch_is_the_pre_rescue_pipeline(self):
         """Off, the extraction pipeline is the one CMPipeline ran before the rescue, verbatim."""
         before = [
-            'samtools view -c unmapped.fifo > unmapped.count & P_UNMAPPED=\\$!',
+            # the counter beside the tee is flagstat since review #12; the decode pipeline itself
+            # is still the pre-rescue one, asserted verbatim below
+            'samtools flagstat -O tsv unmapped.fifo > unmapped.flagstat & P_UNMAPPED=\\$!',
             'if ! samtools view -@ "${task.cpus}" -F 2304 -u \\',
             '"\\${REFERENCE_ARGS[@]}" "${alignment}" |',
             'tee primary.fifo |',
@@ -632,7 +674,7 @@ class Wiring(unittest.TestCase):
             'samtools fastq -@ "${task.cpus}" -N - |',
             'bgzip -@ "${task.cpus}" -c > "\\$READS"; then',
         ]
-        off = MODULE[MODULE.index("\n    else\n"):MODULE.index("\n    fi\n    printf")]
+        off = MODULE[MODULE.index("\n    else\n"):MODULE.index("\n    fi\n    read -r PRIMARY_TOTAL")]
         lines = [line.strip() for line in off.splitlines() if line.strip()]
         start = lines.index(before[0])
         self.assertEqual(lines[start:start + len(before)], before)

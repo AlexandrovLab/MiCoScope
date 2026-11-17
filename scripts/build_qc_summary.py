@@ -34,6 +34,14 @@ COLUMNS = [
     # reads_raw below is the UNMAPPED subset the pipeline extracted, not the library; these
     # columns carry the library itself. NA for FASTQ input, where reads_raw is the library.
     "library_primary_records", "extracted_unmapped_records", "pct_library_unmapped",
+    # Duplicate-flagged (0x400) and QC-failed (0x200) records (Ludmil review #12): tallied over the
+    # library's primary records and over the extracted reads (FLAG 4 + rescued), with their
+    # percentages. Counted, never excluded; the flag-setting programs are in input_pg_chain.
+    # All NA for FASTQ input, which carries no flags.
+    "library_duplicate_records", "library_qcfail_records", "library_dup_and_qcfail_records",
+    "pct_library_duplicate", "pct_library_qcfail", "pct_library_dup_and_qcfail",
+    "extracted_duplicate_reads", "extracted_qcfail_reads", "extracted_dup_and_qcfail_reads",
+    "pct_extracted_duplicate", "pct_extracted_qcfail", "pct_extracted_dup_and_qcfail",
     # low-score mapped rescue, BAM/CRAM only (--extract_low_score_mapped; Ludmil 1 Oct, L8). The
     # upstream aligner, version and bwa -T come from @PG; low_as_mode is on/off and
     # low_as_mode_reason why (scripts/low_score_rescue.py REASONS). low_as_reads_extracted are
@@ -325,6 +333,13 @@ def parse_extract_counts(path: Path) -> dict:
     return {
         "library_primary_records": record.get("library_primary_records") or NA,
         "extracted_unmapped_records": record.get("extracted_unmapped_records") or NA,
+        # Flag tallies (review #12); absent from extract_counts.tsv written before 2026-11-16: NA.
+        "library_duplicate_records": record.get("library_duplicate_records") or NA,
+        "library_qcfail_records": record.get("library_qcfail_records") or NA,
+        "library_dup_and_qcfail_records": record.get("library_dup_and_qcfail_records") or NA,
+        "extracted_duplicate_reads": record.get("extracted_duplicate_reads") or NA,
+        "extracted_qcfail_reads": record.get("extracted_qcfail_reads") or NA,
+        "extracted_dup_and_qcfail_reads": record.get("extracted_dup_and_qcfail_reads") or NA,
         # Absent from extract_counts.tsv written before the low-score rescue existed: NA.
         "low_as_reads_extracted": record.get("low_as_reads_extracted") or NA,
         "low_as_no_as_records": record.get("low_as_no_as_records") or NA,
@@ -811,6 +826,17 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
                                           row.get("library_primary_records"))
         row["pct_retained_of_library"] = pct(row.get("reads_host_depleted"),
                                              row.get("library_primary_records"))
+        # Flag-tally percentages (review #12). The extracted denominator is FLAG 4 + rescued reads;
+        # a pre-rescue NA low-AS count degrades to the FLAG 4 count alone.
+        for flag in ("duplicate", "qcfail", "dup_and_qcfail"):
+            row[f"pct_library_{flag}"] = pct(row.get(f"library_{flag}_records"),
+                                             row.get("library_primary_records"))
+        extracted_total = None
+        if _known(row.get("extracted_unmapped_records")):
+            low = row.get("low_as_reads_extracted")
+            extracted_total = int(row["extracted_unmapped_records"]) + (int(low) if _known(low) else 0)
+        for flag in ("duplicate", "qcfail", "dup_and_qcfail"):
+            row[f"pct_extracted_{flag}"] = pct(row.get(f"extracted_{flag}_reads"), extracted_total)
         check_low_as(row)
         if row.get("low_as_mode") == "off":
             # Nothing was rescued, so nothing can survive: 0, not unknown (audit C13).

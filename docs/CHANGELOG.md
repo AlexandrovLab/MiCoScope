@@ -4,11 +4,19 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **QC counts duplicate-flagged and QC-failed reads entering the analysis (review #12).** The inclusion
+  policy is unchanged — a QC-fail flag on a TCGA read often means only "aligned poorly to the human
+  genome", which for a microbial read is expected — but nobody knew the numbers. extractReads now tallies,
+  in the same single decode pass (flagstat on the already-teed streams), duplicate (0x400), QC-failed
+  (0x200) and both, over the library's primary records and over the extracted reads; the QC summary gains
+  six counts and six percentages (85 columns). FASTQ input reads NA. The counts support a later decision
+  on exclusion experiments; nothing is excluded now.
+
 - **QC separates Bracken's directly assigned reads from redistributed counts (review #18).** The merged
   tables keep only Bracken's final estimate, which invites reading it as reads that directly matched the
   taxon. New `QC_SUMMARY/bracken_count_components.tsv` reports, per sample and taxon, the directly assigned
   count, the redistributed (added) count, the estimate and the added fraction; the QC summary gains
-  `bracken_added_fraction` (species rank, whole sample; 73 columns now). Reporting only: downstream
+  `bracken_added_fraction` (species rank, whole sample; column count then: 73). Reporting only: downstream
   analysis still uses the estimates, and nothing is excluded for a high added fraction.
 
 - **FASTQ input also uses the 5-sequence adapter list (`--adapter_trim auto`, 6 Nov 2026).** `auto` scanned

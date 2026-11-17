@@ -103,10 +103,18 @@ process extractReads {
     # Stream every category to stdout and compress it, so nothing is routed away.
     # Primary records are counted in the SAME decode pass (tee into counting fifos), so the
     # library denominator costs no second read of a 50-90 GB CRAM (audit C07).
+    # flagstat on the teed stream instead of a bare count: the SAME single decode pass also tallies
+    # duplicate-flagged (0x400) and QC-failed (0x200) records (Ludmil review #12). Counting only --
+    # the reads continuing to extraction are untouched and the inclusion policy is unchanged; the
+    # programs that set these flags are visible in input_provenance's input_pg_chain.
+    # flagstat -O tsv rows are "<QC-passed>\t<QC-failed>\t<label>", so for the "total" row this
+    # prints total and QC-failed, and for the "duplicates" row duplicates and duplicate-AND-QC-failed.
+    flagstat_counts() { awk -F '\\t' -v l="\$2" '\$3 == l { print \$1 + \$2, \$2 }' "\$1"; }
     mkfifo primary.fifo
-    samtools view -c primary.fifo  > primary.count  & P_PRIMARY=\$!
+    samtools flagstat -O tsv primary.fifo > primary.flagstat & P_PRIMARY=\$!
     LOW_AS_READS=0
     NO_AS_RECORDS=NA
+    EXT_DUP=0; EXT_QCFAIL=0; EXT_DUP_QCFAIL=0
     if [[ "\$LOW_AS" == "on" ]]; then
         # Same single decode. The second samtools view passes on FLAG 4 records, records with
         # AS:i < 30, and mapped records with no AS at all (only to be counted: the awk drops them).
@@ -124,12 +132,13 @@ process extractReads {
             awk -F '\\t' -v min_as=30 -v counts=low_as.classes -v ids=low_as.ids '
                 /^@/ { print; next }
                 {
-                    if (int(\$2 / 4) % 2 == 1) { unmapped++; print; next }
+                    d = int(\$2 / 1024) % 2; q = int(\$2 / 512) % 2
+                    if (int(\$2 / 4) % 2 == 1) { unmapped++; dup += d; qcf += q; dq += d * q; print; next }
                     score = ""
                     for (i = 12; i <= NF; i++) if (\$i ~ /^AS:[if]:/) { score = substr(\$i, 6); break }
                     if (score == "") { no_as++; next }
                     if (score + 0 < min_as + 0) {
-                        low++
+                        low++; dup += d; qcf += q; dq += d * q
                         r1 = int(\$2 / 64) % 2; r2 = int(\$2 / 128) % 2; sfx = ""
                         if (r1 && !r2) sfx = "/1"; else if (r2 && !r1) sfx = "/2"
                         print \$1 sfx > ids
@@ -137,7 +146,7 @@ process extractReads {
                     }
                     other++
                 }
-                END { printf "%d\\t%d\\t%d\\t%d\\n", unmapped, low, no_as, other > counts }' |
+                END { printf "%d\\t%d\\t%d\\t%d\\t%d\\t%d\\t%d\\n", unmapped, low, no_as, other, dup, qcf, dq > counts }' |
             samtools fastq -@ "${task.cpus}" -N - |
             tee fastq.fifo |
             bgzip -@ "${task.cpus}" -c > "\$READS"; then
@@ -146,7 +155,7 @@ process extractReads {
         fi
         wait \$P_PRIMARY
         wait \$P_FASTQ
-        read -r UNMAPPED_RECORDS LOW_AS_READS NO_AS_RECORDS OTHER_RECORDS < low_as.classes
+        read -r UNMAPPED_RECORDS LOW_AS_READS NO_AS_RECORDS OTHER_RECORDS EXT_DUP EXT_QCFAIL EXT_DUP_QCFAIL < low_as.classes
         if [[ "\$OTHER_RECORDS" != 0 || \$((UNMAPPED_RECORDS + LOW_AS_READS)) != "\$(< fastq.count)" ]]; then
             echo "ERROR: ${sampleID}: extraction classes do not add up: FLAG 4 \$UNMAPPED_RECORDS + low-AS \$LOW_AS_READS != \$(< fastq.count) FASTQ reads (unclassified: \$OTHER_RECORDS)" >&2
             exit 1
@@ -157,7 +166,7 @@ process extractReads {
         rm -f fastq.fifo fastq.count low_as.classes low_as.ids
     else
         mkfifo unmapped.fifo
-        samtools view -c unmapped.fifo > unmapped.count & P_UNMAPPED=\$!
+        samtools flagstat -O tsv unmapped.fifo > unmapped.flagstat & P_UNMAPPED=\$!
         if ! samtools view -@ "${task.cpus}" -F 2304 -u \
             "\${REFERENCE_ARGS[@]}" "${alignment}" |
             tee primary.fifo |
@@ -170,8 +179,9 @@ process extractReads {
         fi
         wait \$P_PRIMARY
         wait \$P_UNMAPPED
-        UNMAPPED_RECORDS="\$(< unmapped.count)"
-        rm -f unmapped.fifo unmapped.count
+        read -r UNMAPPED_RECORDS EXT_QCFAIL < <(flagstat_counts unmapped.flagstat "total (QC-passed reads + QC-failed reads)")
+        read -r EXT_DUP EXT_DUP_QCFAIL < <(flagstat_counts unmapped.flagstat "duplicates")
+        rm -f unmapped.fifo unmapped.flagstat
     fi
     # QC floor (pksProfiler COHORT_CHECKS A3; review #34). An input whose unmapped reads were removed
     # before it reached us -- the @PG chain shows samtools view -F 4 / -f 2 / -q / a region, or a
@@ -188,9 +198,11 @@ process extractReads {
     if [[ "\$INPUT_QC_FLOOR" != pass ]]; then
         echo "extractReads: ${sampleID}: NOT ASSESSABLE (\$INPUT_QC_FLOOR; upstream filter: \${UPSTREAM_FILTER:-none}, FLAG 4 records: \$UNMAPPED_RECORDS)" >&2
     fi
-    printf 'sample\tlibrary_primary_records\textracted_unmapped_records\tlow_as_reads_extracted\tlow_as_no_as_records\tinput_qc_floor\n%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "${sampleID}" "\$(< primary.count)" "\$UNMAPPED_RECORDS" "\$LOW_AS_READS" "\$NO_AS_RECORDS" "\$INPUT_QC_FLOOR" > "${sampleID}.extract_counts.tsv"
-    rm -f primary.fifo primary.count
+    read -r PRIMARY_TOTAL LIB_QCFAIL < <(flagstat_counts primary.flagstat "total (QC-passed reads + QC-failed reads)")
+    read -r LIB_DUP LIB_DUP_QCFAIL < <(flagstat_counts primary.flagstat "duplicates")
+    printf 'sample\tlibrary_primary_records\tlibrary_duplicate_records\tlibrary_qcfail_records\tlibrary_dup_and_qcfail_records\textracted_unmapped_records\tlow_as_reads_extracted\tlow_as_no_as_records\textracted_duplicate_reads\textracted_qcfail_reads\textracted_dup_and_qcfail_reads\tinput_qc_floor\n%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${sampleID}" "\$PRIMARY_TOTAL" "\$LIB_DUP" "\$LIB_QCFAIL" "\$LIB_DUP_QCFAIL" "\$UNMAPPED_RECORDS" "\$LOW_AS_READS" "\$NO_AS_RECORDS" "\$EXT_DUP" "\$EXT_QCFAIL" "\$EXT_DUP_QCFAIL" "\$INPUT_QC_FLOOR" > "${sampleID}.extract_counts.tsv"
+    rm -f primary.fifo primary.flagstat
     gzip -t "\$READS"
     """
 }

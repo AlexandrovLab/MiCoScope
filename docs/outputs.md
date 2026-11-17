@@ -14,7 +14,7 @@ from, next to that run's `work/` and `pipeline_info/`:
 | `HUMANN3` | gene families, pathway abundance and coverage, plus `merged/` |
 | `04_DECONTAMINATION`, `05_BATCH_CORRECTION`, `06_VALIDATION` | optional stages; see their sections |
 | `MULTIQC` | `multiqc_report.html` over fastp JSON and all five FastQC passes |
-| `QC_SUMMARY` | `cmp.qc.summary.tsv` (one row per sample, 73 columns), `bracken_count_components.tsv` (per sample and taxon: Bracken's assigned/added/estimated counts, review #18) and `cmp_cohort_report.html` |
+| `QC_SUMMARY` | `cmp.qc.summary.tsv` (one row per sample, 85 columns), `bracken_count_components.tsv` (per sample and taxon: Bracken's assigned/added/estimated counts, review #18) and `cmp_cohort_report.html` |
 
 Each directory can be moved on its own with the matching parameter: `--unmapped_bam_dir`,
 `--fastqc_dir`, `--mapped_reads_dir`, `--krakenuniq_bracken_dir`, `--metaphlan4_dir`,
@@ -85,6 +85,8 @@ BAM/CRAM (all `NA` for FASTQ):
 | `library_primary_records` | primary records in the BAM/CRAM, the library size |
 | `extracted_unmapped_records` | how many of them were unmapped and extracted; `pct_library_unmapped` is this as a percentage of the library |
 | `pct_retained_of_library` | host-depleted reads as a percentage of the whole library |
+| `library_duplicate_records`, `library_qcfail_records`, `library_dup_and_qcfail_records` | primary records flagged duplicate (0x400), QC-failed (0x200), or both, with `pct_library_duplicate` / `pct_library_qcfail` / `pct_library_dup_and_qcfail` as percentages of the library (review #12). Counted in the same decode pass; the flags never exclude a read, and the programs that set them are in `input_pg_chain` |
+| `extracted_duplicate_reads`, `extracted_qcfail_reads`, `extracted_dup_and_qcfail_reads` | the same flags among the extracted reads (FLAG 4 plus rescued), with `pct_extracted_*` as percentages of the extracted set |
 
 **Low-score mapped rescue (BAM/CRAM, `--extract_low_score_mapped`).** Ten columns record, per
 sample, what the upstream aligner was and whether reads it reported as mapped with a low score were
@@ -173,7 +175,7 @@ Every run produces, unless switched off:
 
 - **`RESULTS/MULTIQC/multiqc_report.html`** — fastp JSON plus all five FastQC passes
   (raw, filtered, post-GRCh38, post-T2T, post-pangenome). Disable with `--skip_multiqc true`.
-- **`RESULTS/QC_SUMMARY/cmp.qc.summary.tsv`** — one row per sample, 73 columns (see *Outputs*).
+- **`RESULTS/QC_SUMMARY/cmp.qc.summary.tsv`** — one row per sample, 85 columns (see *Outputs*).
 - **`RESULTS/QC_SUMMARY/bracken_count_components.tsv`** — per sample, rank and taxon: Bracken's
   directly assigned reads, the reads its statistical redistribution added, their sum (the estimate
   every downstream table keeps), `added_fraction` (NA when the estimate is 0 — different from the
