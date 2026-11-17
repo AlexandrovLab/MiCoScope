@@ -14,7 +14,7 @@ from, next to that run's `work/` and `pipeline_info/`:
 | `HUMANN3` | gene families, pathway abundance and coverage, plus `merged/` |
 | `04_DECONTAMINATION`, `05_BATCH_CORRECTION`, `06_VALIDATION` | optional stages; see their sections |
 | `MULTIQC` | `multiqc_report.html` over fastp JSON and all five FastQC passes |
-| `QC_SUMMARY` | `cmp.qc.summary.tsv` (one row per sample, 72 columns) and `cmp_cohort_report.html` |
+| `QC_SUMMARY` | `cmp.qc.summary.tsv` (one row per sample, 73 columns), `bracken_count_components.tsv` (per sample and taxon: Bracken's assigned/added/estimated counts, review #18) and `cmp_cohort_report.html` |
 
 Each directory can be moved on its own with the matching parameter: `--unmapped_bam_dir`,
 `--fastqc_dir`, `--mapped_reads_dir`, `--krakenuniq_bracken_dir`, `--metaphlan4_dir`,
@@ -173,7 +173,13 @@ Every run produces, unless switched off:
 
 - **`RESULTS/MULTIQC/multiqc_report.html`** — fastp JSON plus all five FastQC passes
   (raw, filtered, post-GRCh38, post-T2T, post-pangenome). Disable with `--skip_multiqc true`.
-- **`RESULTS/QC_SUMMARY/cmp.qc.summary.tsv`** — one row per sample, 72 columns (see *Outputs*).
+- **`RESULTS/QC_SUMMARY/cmp.qc.summary.tsv`** — one row per sample, 73 columns (see *Outputs*).
+- **`RESULTS/QC_SUMMARY/bracken_count_components.tsv`** — per sample, rank and taxon: Bracken's
+  directly assigned reads, the reads its statistical redistribution added, their sum (the estimate
+  every downstream table keeps), `added_fraction` (NA when the estimate is 0 — different from the
+  taxon having no row), and `consistent` (assigned + added = estimated). The summary's
+  `bracken_added_fraction` column is the species-rank whole-sample ratio. A high added fraction is
+  context for interpretation, never an automatic exclusion.
 - **`RESULTS/QC_SUMMARY/cmp_cohort_report.html`** — a self-contained page (no network, no
   CDN) with the retention chart and the tables. Disable with `--skip_cohort_report true`.
 - **`pipeline_info/RUN_REPORT.txt`** and the provenance record — see *Outputs*.

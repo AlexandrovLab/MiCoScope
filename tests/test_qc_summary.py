@@ -65,9 +65,13 @@ def write_krakenuniq(directory, sample, root=250000, unclassified=50000, human=N
     (directory / f"{sample}.krakenuniq.report.txt").write_text("\n".join(lines) + "\n")
 
 
-def write_bracken(directory, sample, level, names):
+def write_bracken(directory, sample, level, names, triples=None):
+    """triples: {name: (assigned, added, estimated)}; default 10 + 5 = 15 for every taxon."""
     header = "name\ttaxonomy_id\ttaxonomy_lvl\tkraken_assigned_reads\tadded_reads\tnew_est_reads\tfraction_total_reads"
-    lines = [header] + [f"{n}\t123\t{level}\t10\t5\t15\t0.1" for n in names]
+    lines = [header]
+    for n in names:
+        a, ad, e = (triples or {}).get(n, (10, 5, 15))
+        lines.append(f"{n}\t123\t{level}\t{a}\t{ad}\t{e}\t0.1")
     (directory / f"{sample}.bracken.{level}.report.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -274,6 +278,55 @@ class NonMicrobialTests(unittest.TestCase):
             self.assertEqual(row["bracken_human_reads"], 100)
             self.assertEqual(row["pct_bracken_synthetic"], "60.00")
             self.assertEqual(row["pct_bracken_human"], "10.00")
+
+
+class BrackenComponentTests(unittest.TestCase):
+    """Review #18: assigned + added = estimated, visible per taxon; redistribution is not evidence."""
+
+    def components(self, tmp):
+        out = Path(tmp) / "components.tsv"
+        QC.write_bracken_components(Path(tmp), out)
+        with out.open() as fh:
+            return list(csv.DictReader(fh, delimiter="\t"))
+
+    def test_three_counts_fraction_and_consistency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_bracken(Path(tmp), "S1", "S", ["Escherichia coli", "Zero taxon"],
+                          triples={"Escherichia coli": (10, 5, 15), "Zero taxon": (0, 0, 0)})
+            write_bracken(Path(tmp), "S1", "G", ["Escherichia"])
+            rows = {(r["rank"], r["taxon"]): r for r in self.components(tmp)}
+            ec = rows[("species", "Escherichia coli")]
+            self.assertEqual((ec["assigned_reads"], ec["added_reads"], ec["estimated_reads"]),
+                             ("10", "5", "15"))
+            self.assertEqual(ec["added_fraction"], "0.3333")
+            self.assertEqual(ec["consistent"], "true")
+            # a zero estimate is an undefined fraction -- NOT the same as having no row at all
+            self.assertEqual(rows[("species", "Zero taxon")]["added_fraction"], "NA")
+            self.assertIn(("genus", "Escherichia"), rows)
+            self.assertNotIn(("species", "Absent taxon"), rows)
+
+    def test_inconsistent_row_is_flagged_not_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_bracken(Path(tmp), "S1", "S", ["Odd taxon"], triples={"Odd taxon": (10, 5, 99)})
+            row = self.components(tmp)[0]
+            self.assertEqual(row["consistent"], "false")
+            self.assertEqual(row["estimated_reads"], "99")
+
+    def test_no_bracken_reports_writes_header_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.components(tmp), [])
+
+    def test_summary_added_fraction_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_bracken(Path(tmp), "S1", "S", ["A sp", "B sp"],
+                          triples={"A sp": (10, 5, 15), "B sp": (20, 5, 25)})
+            row = build_rows(tmp)["S1"]
+            self.assertEqual(row["bracken_added_fraction"], "0.2500")   # (5+5)/(15+25)
+
+    def test_summary_fraction_na_for_no_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_bracken(Path(tmp), "THIN", "S", [])   # header-only no-call
+            self.assertEqual(build_rows(tmp)["THIN"]["bracken_added_fraction"], "NA")
 
 
 class TaxonCountTests(unittest.TestCase):

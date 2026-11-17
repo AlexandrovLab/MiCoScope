@@ -73,6 +73,10 @@ COLUMNS = [
     # Bracken species estimates for the same two taxa, and their share of all species reads
     "bracken_human_reads", "bracken_synthetic_reads", "pct_bracken_human", "pct_bracken_synthetic",
     "bracken_genera", "bracken_species",
+    # species rank, whole sample: sum(added) / sum(estimated) -- how much of the Bracken total is
+    # statistical redistribution rather than directly assigned reads (Ludmil review #18). The per-
+    # taxon breakdown is bracken_count_components.tsv, written next to this table.
+    "bracken_added_fraction",
     "metaphlan_genera", "metaphlan_species",
     "shared_genera", "shared_species",
     # decontamination
@@ -481,6 +485,63 @@ def parse_bracken_taxa(path: Path) -> set[str]:
     return names
 
 
+def _bracken_component_rows(path: Path):
+    """(name, taxonomy_id, assigned, added, estimated) per data row of a raw Bracken report.
+
+    Bracken's own columns: kraken_assigned_reads (directly assigned by the classifier),
+    added_reads (statistical redistribution), new_est_reads (their sum, what every downstream
+    table keeps). A header-only no-call file yields nothing; a row with a malformed count is
+    skipped, like parse_bracken_taxa does.
+    """
+    with path.open() as handle:
+        for record in csv.DictReader(handle, delimiter="\t"):
+            name = (record.get("name") or "").strip()
+            try:
+                assigned = int(float(record["kraken_assigned_reads"]))
+                added = int(float(record["added_reads"]))
+                estimated = int(float(record["new_est_reads"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            if name:
+                yield name, (record.get("taxonomy_id") or "").strip(), assigned, added, estimated
+
+
+def parse_bracken_added_fraction(path: Path):
+    """sum(added) / sum(estimated) over the report, 4 decimals; NA with no rows or zero total."""
+    added = estimated = 0
+    for _, _, _, add, est in _bracken_component_rows(path):
+        added += add
+        estimated += est
+    return f"{added / estimated:.4f}" if estimated else NA
+
+
+def write_bracken_components(inputs: Path, output: Path) -> None:
+    """One row per sample x rank x taxon: Bracken's three counts side by side (review #18).
+
+    Interpreting the final estimate as reads that directly matched the taxon overstates the
+    evidence; this table shows how much of each estimate is redistribution. added_fraction is
+    added/estimated (NA when the estimate is 0, which is different from the taxon having no
+    row at all); consistent says whether assigned + added == estimated, Bracken's own invariant.
+    Reporting only: nothing downstream reads this file.
+    """
+    header = ["sample", "rank", "taxon", "taxonomy_id", "assigned_reads", "added_reads",
+              "estimated_reads", "added_fraction", "consistent"]
+    n = 0
+    with output.open("w", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+        writer.writerow(header)
+        for suffix, rank in ((".bracken.G.report.txt", "genus"), (".bracken.S.report.txt", "species")):
+            for path in sorted(inputs.rglob(f"*{suffix}")):
+                sample = sample_of(path, suffix)
+                for name, taxid, assigned, added, estimated in _bracken_component_rows(path):
+                    fraction = f"{added / estimated:.4f}" if estimated else NA
+                    consistent = "true" if assigned + added == estimated else "false"
+                    writer.writerow([sample, rank, name, taxid, assigned, added, estimated,
+                                     fraction, consistent])
+                    n += 1
+    print(f"Bracken count components: {n} row(s) -> {output}")
+
+
 def parse_metaphlan_taxa(path: Path) -> tuple[set[str], set[str]]:
     """Genus and species names from a MetaPhlAn profile.
 
@@ -645,6 +706,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
         sample = sample_of(path, ".bracken.S.report.txt")
         bracken_species[sample] = parse_bracken_taxa(path)
         row_for(sample)["bracken_species"] = len(bracken_species[sample])
+        row_for(sample)["bracken_added_fraction"] = parse_bracken_added_fraction(path)
         row_for(sample).update(parse_bracken_nonmicrobial(path))
 
     for path in sorted(inputs.rglob("*.profiled_metagenome.txt")):
@@ -777,6 +839,9 @@ def main() -> int:
     parser.add_argument("--inputs", required=True, type=Path,
                         help="directory of staged per-sample QC artefacts")
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--components", type=Path, default=None,
+                        help="also write the per sample x taxon Bracken count-components table "
+                             "(assigned / added / estimated; review #18) to this path")
     parser.add_argument("--min-reads", type=int, default=100000,
                         help="--consensus_min_reads, for cleared_consensus_gate")
     parser.add_argument("--min-reads-after-depletion", type=int, default=0,
@@ -796,6 +861,8 @@ def main() -> int:
         writer.writeheader()
         writer.writerows(rows)
     print(f"QC summary: {len(rows)} sample(s) -> {args.output}")
+    if args.components:
+        write_bracken_components(args.inputs, args.components)
     # Counts only: which terminal states, how many samples each. Never silent about a failure.
     states: dict[str, int] = {}
     for row in rows:

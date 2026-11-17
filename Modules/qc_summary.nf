@@ -29,6 +29,9 @@ process qcSummary {
     val deps
     output:
     path("cmp.qc.summary.tsv"), emit: summary
+    // Per sample x taxon: Bracken assigned / added / estimated counts (review #18). Reporting
+    // only; header-only when no Bracken report was staged (e.g. --start_from decontam).
+    path("bracken_count_components.tsv"), emit: components
 
     script:
     """
@@ -37,6 +40,7 @@ process qcSummary {
     python3 "${params.scripts}/build_qc_summary.py" \\
         --inputs . \\
         --output cmp.qc.summary.tsv \\
+        --components bracken_count_components.tsv \\
         --min-reads "${params.consensus_min_reads}" \\
         --min-reads-after-depletion "${params.min_reads_after_depletion}" \\
         --stages "${stages}"

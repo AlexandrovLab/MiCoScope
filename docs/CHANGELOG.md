@@ -4,6 +4,13 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **QC separates Bracken's directly assigned reads from redistributed counts (review #18).** The merged
+  tables keep only Bracken's final estimate, which invites reading it as reads that directly matched the
+  taxon. New `QC_SUMMARY/bracken_count_components.tsv` reports, per sample and taxon, the directly assigned
+  count, the redistributed (added) count, the estimate and the added fraction; the QC summary gains
+  `bracken_added_fraction` (species rank, whole sample; 73 columns now). Reporting only: downstream
+  analysis still uses the estimates, and nothing is excluded for a high added fraction.
+
 - **FASTQ input also uses the 5-sequence adapter list (`--adapter_trim auto`, 6 Nov 2026).** `auto` scanned
   FASTQ against the 234-sequence list, which made fastp take 6-7 h per sample on a large FASTQ cohort (some
   tasks hit the 2-day limit). The short list found every planted adapter in the synthetic test at 1/38 of the
