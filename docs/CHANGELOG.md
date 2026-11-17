@@ -4,6 +4,9 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **`--fastp_extra` (default empty, a no-op).** Passes extra fastp flags through for the review #13
+  poly-G / low-complexity experiment arms; nothing becomes a default without the comparison.
+
 - **Validation reports support-to-estimate ratios (review #3/#16/#17).** `validation_stats.all.tsv` gains
   `support_to_bracken_ratio` and `unique_to_bracken_ratio` (supporting / unique reads over the row's
   Bracken estimate; NA at estimate 0). Reporting only — no status changes. minimap2's alternative-alignment

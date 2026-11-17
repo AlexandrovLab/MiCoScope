@@ -227,6 +227,10 @@ params.humann3_protein_db=null     // Set in a site profile or with --humann3_pr
 params.adapters="${projectDir}/ref/known_adapters.fna"
 params.adapters_core="${projectDir}/ref/illumina_core_adapters.fna"  // 5 Illumina sequences: the default for every sample
 params.adapter_trim="auto"  // auto | always | never -- see the adapter_trim note in the workflow below
+// Extra fastp flags, space-separated; default none (review #13 experiment arms, e.g.
+// '--trim_poly_g --poly_g_min_len 10' or '--low_complexity_filter --complexity_threshold 30').
+// Experiments only: nothing becomes a default without the comparison.
+params.fastp_extra = ""
 
 // ============================================================================
 // CONDA ENVIRONMENT PATHS
@@ -416,6 +420,8 @@ workflow {
     }
     def toolVersionProblem = ToolVersions.validate(params.tool_version_check)
     if (toolVersionProblem) error toolVersionProblem
+    if (params.fastp_extra.toString() =~ /["'`;$|&<>\\]/)
+        error "--fastp_extra may hold only plain fastp flags"
     def adapterTrimMode = params.adapter_trim.toString().toLowerCase()
     if (!(adapterTrimMode in ['auto', 'always', 'never'])) {
         error "Invalid --adapter_trim '${params.adapter_trim}'; expected auto, always or never"

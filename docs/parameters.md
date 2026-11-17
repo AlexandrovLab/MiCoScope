@@ -133,6 +133,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--humann3_protein_db` | `null` | Set in a site profile or with --humann3_protein_db |
 | `--adapters` | `ref/known_adapters.fna` | the 234-sequence adapter FASTA, used only with `--adapter_trim always` |
 | `--adapters_core` | `ref/illumina_core_adapters.fna` | the 5-sequence Illumina adapter FASTA `--adapter_trim auto` uses for every sample |
+| `--fastp_extra` | (empty) | extra fastp flags for the review #13 experiment arms (e.g. `--trim_poly_g --poly_g_min_len 10`, `--low_complexity_filter --complexity_threshold 30`); shell metacharacters are rejected |
 | `--adapter_trim` | `auto` | auto | always | never -- see the adapter_trim note in the workflow below |
 
 ## Conda Environment Paths

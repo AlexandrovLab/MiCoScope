@@ -55,7 +55,7 @@ process filterReads {
     for input_fastq in ${inputs}; do
         gzip -t "\$input_fastq"
     done
-    ${fastp_prefix} fastp -l 45 ${adapter_args} --cut_tail \
+    ${fastp_prefix} fastp -l 45 ${adapter_args} ${params.fastp_extra} --cut_tail \
         ${fastp_input} -w "${task.cpus}" --compression 4 \
         --json "${sampleID}.fastp.json" --html "${sampleID}.fastp.html" \
         -o "\$FILTERED"

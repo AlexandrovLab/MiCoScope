@@ -89,6 +89,11 @@ class InputNormalizationTests(unittest.TestCase):
         # auto: every sample (FASTQ and BAM/CRAM) gets the short Illumina list; always: the 234 list
         self.assertIn("(adapterTrimMode == 'never' ? '' : params.adapters_core.toString())", text)
         self.assertNotIn("pretrimmed ? params.adapters_core", text)
+        # --fastp_extra (review #13 experiment arms): defaults to nothing, reaches the fastp call,
+        # and shell metacharacters are rejected at launch.
+        self.assertIn('params.fastp_extra = ""', text)
+        self.assertIn("--fastp_extra may hold only plain fastp flags", text)
+        self.assertIn("${adapter_args} ${params.fastp_extra} --cut_tail", module)
         core = (ROOT / "ref" / "illumina_core_adapters.fna").read_text().split()
         seqs = [s for s in core if not s.startswith(">")]
         self.assertIn("AGATCGGAAGAGCACACGTCTGAACTCCAGTCA", seqs)   # TruSeq read 1
