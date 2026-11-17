@@ -2,7 +2,7 @@
 
 Each scenario is one the 2026-09-23 simulation benchmark showed the scorer must get right.
 """
-import csv, gzip, os, subprocess, sys, tempfile, unittest
+import csv, gzip, os, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -432,3 +432,92 @@ class Wiring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestRebuild(unittest.TestCase):
+    """Review #41: a preserved manifest rebuilds the same reference, bit for bit, offline
+    (file:// URLs); missing or changed material stops the rebuild instead of substituting."""
+
+    COLS = ["assembly_accession", "bioproject", "biosample", "wgs_master", "refseq_category", "taxid",
+            "species_taxid", "organism_name", "infraspecific_name", "isolate", "version_status",
+            "assembly_level", "release_type", "genome_rep", "seq_rel_date", "asm_name", "asm_submitter",
+            "gbrs_paired_asm", "paired_asm_comp", "ftp_path", "excluded_from_refseq",
+            "relation_to_type_material", "asm_not_live_date", "assembly_type", "group", "genome_size"]
+
+    def setUp(self):
+        import gzip as gz, random
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d)
+        self.cache = self.d / "cache"
+        self.src = self.d / "src"
+        rng = random.Random(41)
+        rows = []
+        for acc, taxid, name in (("GCF_A1.1", "11", "Alpha sp"), ("GCF_B1.1", "22", "Beta sp")):
+            asm = self.src / f"{acc}_asm"
+            asm.mkdir(parents=True)
+            seq = "".join(rng.choice("ACGT") for _ in range(2000))
+            with gz.open(asm / f"{acc}_asm_genomic.fna.gz", "wt") as fh:
+                fh.write(f">{acc}_c1\n{seq}\n")
+            row = dict.fromkeys(self.COLS, "na")
+            row.update(assembly_accession=acc, taxid=taxid, species_taxid=taxid, organism_name=name,
+                       version_status="latest", assembly_level="Complete Genome",
+                       refseq_category="reference genome", genome_size="2000",
+                       ftp_path=f"file://{asm}")
+            rows.append(row)
+        self.cache.mkdir()
+        for g in ("bacteria", "archaea", "fungi", "protozoa"):
+            with open(self.cache / f"assembly_summary_{g}.txt", "w") as fh:
+                fh.write("# header\n#" + "\t".join(self.COLS) + "\n")
+                if g == "bacteria":
+                    for row in rows:
+                        fh.write("\t".join(row[c] for c in self.COLS) + "\n")
+        import gzip as gz2
+        with gz2.open(self.cache / "T2T-CHM13v2.0.fna.gz", "wt") as fh:
+            fh.write(">chrT\n" + "".join(rng.choice("ACGT") for _ in range(500)) + "\n")
+        with open(self.d / "species.tsv", "w") as fh:
+            fh.write("label\tspecies\ttaxid\nAlpha_sp\tAlpha sp\t11\nBeta_sp\tBeta sp\t22\n")
+
+    def run_build(self, out, *extra):
+        return subprocess.run([sys.executable, str(S / "build_validation_ref.py"),
+                               "--cache_dir", str(self.cache), "--out_dir", str(self.d / out), *extra],
+                              capture_output=True, text=True)
+
+    def build_once(self):
+        r = self.run_build("out1", "--species", str(self.d / "species.tsv"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return self.d / "out1" / "validation_reference_manifest.tsv"
+
+    def test_rebuild_is_bit_identical(self):
+        manifest = self.build_once()
+        r = self.run_build("out2", "--from_manifest", str(manifest))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for name in ("validation_reference.fna", "contig_labels.tsv", "validation_reference_manifest.tsv"):
+            self.assertEqual((self.d / "out1" / name).read_bytes(), (self.d / "out2" / name).read_bytes(),
+                             name)
+
+    def test_changed_genome_content_stops_the_rebuild(self):
+        import gzip as gz
+        manifest = self.build_once()
+        cached = self.cache / "genomes" / "GCF_A1.1_asm_genomic.fna.gz"
+        with gz.open(cached, "wt") as fh:                      # valid gzip, different sequence
+            fh.write(">GCF_A1.1_c1\n" + "A" * 2000 + "\n")
+        r = self.run_build("out3", "--from_manifest", str(manifest))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("md5", r.stderr)
+        self.assertIn("GCF_A1.1", r.stderr)
+
+    def test_missing_material_stops_the_rebuild(self):
+        manifest = self.build_once()
+        (self.cache / "genomes" / "GCF_B1.1_asm_genomic.fna.gz").unlink()
+        shutil.rmtree(self.src / "GCF_B1.1_asm")               # gone from the cache AND the source
+        r = self.run_build("out4", "--from_manifest", str(manifest))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("could not be downloaded", r.stderr)
+        self.assertIn("GCF_B1.1", r.stderr)
+
+    def test_species_and_manifest_are_exclusive(self):
+        manifest = self.build_once()
+        r = self.run_build("out5", "--species", str(self.d / "species.tsv"),
+                           "--from_manifest", str(manifest))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("exactly one of --species or --from_manifest", r.stderr)

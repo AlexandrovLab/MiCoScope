@@ -15,6 +15,14 @@ DB was built):
     group, the scorer's fallback level
 Human T2T-CHM13v2.0 is added to the same reference so leftover human reads compete.
 
+Rebuild route (--from_manifest, Ludmil review #41): recording what was used and being able to
+rebuild from that record are different capabilities. Given a preserved
+validation_reference_manifest.tsv, the build uses exactly its genome list -- no catalog, no new
+selection, no de-duplication (the manifest is the post-dedup list, in emission order) -- verifies
+every genome file against the manifest's md5, re-runs the ANI curation and STOPS unless it
+reproduces the recorded labels and actions. Missing material or a checksum mismatch stops the
+rebuild; nothing is silently substituted.
+
 Outputs (in --out_dir):
   validation_reference.fna     all contigs, named <label>|<accession>|<contig>
   contig_labels.tsv            contig, label, accession, length, ani_group ('' when ungrouped)
@@ -189,7 +197,11 @@ def ani_curate(kept_rows, skani, threads, tmp, anchor_ani, margin, group_ani):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--species", required=True)
+    ap.add_argument("--species", default=None)
+    ap.add_argument("--from_manifest", type=str, default=None,
+                    help="rebuild from a preserved validation_reference_manifest.tsv (review #41): "
+                         "same genomes, md5-verified, ANI curation cross-checked against the record; "
+                         "--species, the catalog, de-duplication and the size gate are not used")
     ap.add_argument("--cache_dir", required=True, help="shared cache for summaries, genomes and T2T")
     ap.add_argument("--out_dir", default=".")
     ap.add_argument("--max_genomes", type=int, default=50)
@@ -210,12 +222,35 @@ def main(argv=None):
     ap.add_argument("--snapshot", default=None, help="RefSeq snapshot month (YYYY-MM) in the cache key")
     a = ap.parse_args(argv)
 
-    species = list(csv.DictReader(open(a.species), delimiter="\t"))
-    by_taxid, by_name, dates = load_summaries(a.cache_dir, a.summary_max_age_days, a.snapshot)
+    if bool(a.species) == bool(a.from_manifest):
+        sys.exit("ERROR: give exactly one of --species or --from_manifest")
     gdir = os.path.join(a.cache_dir, "genomes"); os.makedirs(gdir, exist_ok=True)
 
-    plan, missing = [], []
-    for s in species:
+    if a.from_manifest:
+        with open(a.from_manifest) as fh:
+            recorded = [r for r in csv.DictReader(fh, delimiter="\t") if r["taxid"] != "9606"]
+        if not recorded:
+            sys.exit(f"ERROR: no genome rows in {a.from_manifest}")
+        # The plan IS the record: filed labels (curation re-derives the final ones), original URLs,
+        # manifest order (= emission order, so the rebuilt FASTA is byte-identical).
+        plan, missing, species = [], [], []
+        for r in recorded:
+            s = {"label": r["filed_label"], "species": r["species"], "taxid": r["taxid"],
+                 "_want_label": r["label"], "_want_action": r.get("ani_action") or "NA",
+                 "_want_md5": r["md5"], "_summary_date": r.get("summary_date") or "NA"}
+            species.append(s)
+            rr = {"assembly_accession": r["accession"], "assembly_level": r["assembly_level"],
+                  "refseq_category": r["refseq_category"]}
+            url = r["url"]
+            plan.append((s, rr, url, os.path.join(gdir, os.path.basename(url)), r["matched_by"]))
+        dates = None
+        print(f"rebuild from manifest: {len(plan)} genomes (no catalog, no selection, no size gate)")
+    else:
+        species = list(csv.DictReader(open(a.species), delimiter="\t"))
+        by_taxid, by_name, dates = load_summaries(a.cache_dir, a.summary_max_age_days, a.snapshot)
+        plan, missing = [], []
+
+    for s in species if not a.from_manifest else []:
         rows = by_taxid.get(s["taxid"], []) if s["taxid"] != "NA" else []
         how = "taxid"
         if not rows:
@@ -229,11 +264,13 @@ def main(argv=None):
 
     # Size the reference BEFORE downloading or indexing anything (audit B05). RefSeq summaries carry
     # genome_size; a genome without it is counted at 5 Mb (a typical bacterium). Plus T2T (3.1 Gb).
+    # A manifest rebuild skips the gate: that reference was already accepted once.
     known = [int(r["genome_size"]) for _, r, _, _, _ in plan if (r.get("genome_size") or "").isdigit()]
     planned_bases = sum(known) + 5_000_000 * (len(plan) - len(known)) + 3_117_275_501
-    print(f"planned reference: {planned_bases / 1e9:.1f} Gb before de-duplication "
-          f"({len(plan) - len(known)} genome(s) without a size, counted at 5 Mb); cap {a.max_ref_gb:g} Gb")
-    if planned_bases > a.max_ref_gb * 1e9:
+    if not a.from_manifest:
+        print(f"planned reference: {planned_bases / 1e9:.1f} Gb before de-duplication "
+              f"({len(plan) - len(known)} genome(s) without a size, counted at 5 Mb); cap {a.max_ref_gb:g} Gb")
+    if not a.from_manifest and planned_bases > a.max_ref_gb * 1e9:
         sys.exit(f"ERROR: the planned validation reference is {planned_bases / 1e9:.1f} Gb, above "
                  f"--validation_max_ref_gb {a.max_ref_gb:g}. Lower --validation_max_genomes, raise "
                  "--validation_min_support (fewer species), or raise the cap (index memory grows with it).")
@@ -248,25 +285,53 @@ def main(argv=None):
         sys.exit("ERROR: could not download the human T2T reference")
 
     tmp = tempfile.mkdtemp(prefix="valref_")
-    kept_rows = []
-    by_label = {}
-    for s, r, url, dest, how in plan:
-        if os.path.exists(dest):
-            by_label.setdefault(s["label"], []).append((s, r, url, dest, how))
-    for s in species:
-        if s["label"] not in by_label and not any(m[0] is s for m in missing):
-            missing.append((s, "all genome downloads failed"))
-    for label, items in by_label.items():
-        files = dedup(label, [i[3] for i in items], a.skani, a.dedup_ani, a.threads, tmp)
-        kept_rows += [i for i in items if i[3] in files]
+    if a.from_manifest:
+        # Stop if required material is missing or no longer matches its recorded checksum (review
+        # #41). The manifest is already the post-dedup list in emission order: no de-duplication.
+        absent = [r["assembly_accession"] for s, r, url, dest, how in plan if not os.path.exists(dest)]
+        if absent:
+            sys.exit(f"ERROR: {len(absent)} genome(s) could not be downloaded for the rebuild "
+                     f"(e.g. {absent[:3]}); nothing is substituted")
+        changed = [r["assembly_accession"] for s, r, url, dest, how in plan
+                   if md5(dest) != s["_want_md5"]]
+        if changed:
+            sys.exit(f"ERROR: {len(changed)} genome file(s) do not match the manifest md5 "
+                     f"(e.g. {changed[:3]}); the recorded reference cannot be rebuilt from them")
+        kept_rows = [(s, r, url, dest, how) for s, r, url, dest, how in plan]
+    else:
+        kept_rows = []
+        by_label = {}
+        for s, r, url, dest, how in plan:
+            if os.path.exists(dest):
+                by_label.setdefault(s["label"], []).append((s, r, url, dest, how))
+        for s in species:
+            if s["label"] not in by_label and not any(m[0] is s for m in missing):
+                missing.append((s, "all genome downloads failed"))
+        for label, items in by_label.items():
+            files = dedup(label, [i[3] for i in items], a.skani, a.dedup_ani, a.threads, tmp)
+            kept_rows += [i for i in items if i[3] in files]
     final_rows, group_of, ani_record = ani_curate(kept_rows, a.skani, a.threads, tmp, a.anchor_ani,
                                                   a.relabel_margin, a.group_ani)
     if a.group_ani <= 0:
         group_of = {}
     shutil.rmtree(tmp)
+    final_label = {r[2]["assembly_accession"]: r[0] for r in final_rows}
+    if a.from_manifest:
+        drift = []
+        for s, r, url, dest, how in kept_rows:
+            acc = r["assembly_accession"]
+            rec = ani_record.get(acc)
+            if (final_label.get(acc, "") != s["_want_label"]
+                    or (rec["action"] if rec else "NA") != s["_want_action"]):
+                drift.append(acc)
+        if drift:
+            sys.exit(f"ERROR: the ANI curation no longer reproduces the recorded labels/actions for "
+                     f"{len(drift)} genome(s) (e.g. {drift[:3]}): tool or version drift. The rebuild "
+                     "stops rather than silently differing from the record.")
     # An unnamed "sp." species whose every genome moved to a named one leaves the reference.
+    # Catalog route only: a manifest rebuild reproduces the record, where that departure already shows.
     still = {r[0] for r in final_rows}
-    for s in species:
+    for s in species if not a.from_manifest else []:
         if s["label"] in by_label and s["label"] not in still:
             to = sorted({rec["label"] for rec in ani_record.values() if rec["filed_label"] == s["label"]} - {""})
             missing.append((s, "every genome relabelled by ANI to " + (", ".join(to) or "none (dropped)")))
@@ -297,7 +362,6 @@ def main(argv=None):
         man.write("label\tspecies\ttaxid\tmatched_by\taccession\tassembly_level\trefseq_category\t"
                   "md5\turl\tsummary_date\tfiled_label\tani_action\tani_score_own\tani_best_label\t"
                   "ani_score_best\n")
-        final_label = {r[2]["assembly_accession"]: r[0] for r in final_rows}
         for s, r, url, dest, how in kept_rows:
             acc = r["assembly_accession"]
             rec = ani_record.get(acc)
@@ -307,7 +371,8 @@ def main(argv=None):
             ani_cols = (f"{rec['action']}\t{rec['score_own']:.2f}\t{rec['best_label']}\t{rec['score_best']:.2f}"
                         if rec else "NA\tNA\tNA\tNA")
             man.write(f"{label}\t{s['species']}\t{s['taxid']}\t{how}\t{acc}\t"
-                      f"{r['assembly_level']}\t{r['refseq_category']}\t{md5(dest)}\t{url}\t{dates[r['_group']]}\t"
+                      f"{r['assembly_level']}\t{r['refseq_category']}\t{md5(dest)}\t{url}\t"
+                      f"{s['_summary_date'] if a.from_manifest else dates[r['_group']]}\t"
                       f"{s['label']}\t{ani_cols}\n")
         emit(t2t, HUMAN_LABEL, "GCF_009914755.1")
         man.write(f"{HUMAN_LABEL}\tHomo sapiens\t9606\tfixed\tGCF_009914755.1\tComplete Genome\t"
@@ -321,8 +386,9 @@ def main(argv=None):
     n_genomes = len(final_rows)
     # labels that left by ANI relabelling are listed but are not missing genomes
     n_missing = sum(1 for _, why in missing if not why.startswith("every genome relabelled"))
-    frac = n_missing / len(species) if species else 0
-    print(f"reference: {n_genomes} genomes for {len(by_label)} species (+ human T2T); "
+    frac = (n_missing / len(species) if species else 0) if not a.from_manifest else 0
+    n_labels = len({r[0] for r in final_rows})
+    print(f"reference: {n_genomes} genomes for {n_labels} species (+ human T2T); "
           f"{n_missing} species missing ({frac:.1%}); {len(plan) - n_genomes} dropped as duplicates or failed")
     if frac > a.max_missing_frac:
         sys.exit(f"ERROR: {n_missing} of {len(species)} species ({frac:.1%}) got no genome, above "

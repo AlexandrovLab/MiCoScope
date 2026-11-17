@@ -8,3 +8,4 @@
 #
 # package	conda_version	reports	why
 bracken	3.1p1	3.0.1	upstream v3.1 tag still sets VERSION="3.0.1" in the bracken script; bioconda 3.1p1 builds that tag (pksProfiler, checked 2026-10-06; CMPipeline env checked 2026-10-26)
+metaphlan	4.2.6	4.2.5	bioconda metaphlan-4.2.6-pyhdfd78af_0 ships a binary that prints "MetaPhlAn version 4.2.5 (13 Jul 2026)": upstream left __version__ behind at the 4.2.6 tag. Checked on the built candidate env (job 14318884, 2026-11-17); conda-meta says 4.2.6
