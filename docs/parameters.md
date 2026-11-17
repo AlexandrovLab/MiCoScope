@@ -147,6 +147,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--krakenuniq_bracken_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--consensus_taxa_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--metaphlan4_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
+| `--metaphlan42_env` | `conda_envs/metaphlan42_env.yml` | CANDIDATE MetaPhlAn 4.2.6 env for the vJan26 upgrade comparison; no process uses it until the comparison passes |
 | `--humann3_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--decontam_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--validation_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |

@@ -243,6 +243,10 @@ params.multiqc_env = "${projectDir}/conda_envs/lock/multiqc_env.linux-64.txt"
 params.krakenuniq_bracken_env = "${projectDir}/conda_envs/lock/krakenUniq_bracken_env.linux-64.txt"
 params.consensus_taxa_env = "${projectDir}/conda_envs/lock/consensus_taxa_env.linux-64.txt"
 params.metaphlan4_env = "${projectDir}/conda_envs/lock/metaphlan4_env.linux-64.txt"
+// CANDIDATE (16 Nov 2026), not used by any process: MetaPhlAn 4.2.6 for the vJan26 database. The
+// upgrade comparison passes it explicitly (--metaphlan4_env "${projectDir}/conda_envs/metaphlan42_env.yml"
+// or its lockfile once built); it replaces metaphlan4_env only if the comparison passes.
+params.metaphlan42_env = "${projectDir}/conda_envs/metaphlan42_env.yml"
 params.humann3_env = "${projectDir}/conda_envs/lock/humann3_env.linux-64.txt"
 params.decontam_env = "${projectDir}/conda_envs/lock/decontam_env.linux-64.txt"
 params.validation_env = "${projectDir}/conda_envs/lock/validation_env.linux-64.txt"

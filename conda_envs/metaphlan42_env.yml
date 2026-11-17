@@ -1,0 +1,15 @@
+# CANDIDATE, not wired as a default (review #15 + upgrade decision, Ammal 16 Nov 2026):
+# MetaPhlAn 4.2.6 for the vJan26_CHOCOPhlAnSGB_202605 database -- arm C of the staged
+# 202307 -> 202403 -> 4.2.6+vJan26 comparison on the CRC50 10-sample set. Becomes the
+# production metaphlan4_env only if the comparison and the HUMAnN compatibility check pass.
+# The exact build is conda_envs/lock/metaphlan42_env.linux-64.txt; this file is its source.
+name: metaphlan42_env
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.11
+  - metaphlan=4.2.6
+  - bowtie2=2.5.5
+  - samtools=1.24
