@@ -4,6 +4,16 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **"Microbial" now means bacteria + archaea + fungi + protozoa (review #14/#21; 16 Nov 2026).** The
+  MetaPhlAn gate and the QC summary's `bracken_microbial_reads` sum the KrakenUniq clade counts of the
+  taxids in `conf/microbial_scope_taxids.tsv` (`--microbial_scope`): mutually non-nested clades matching the
+  validation reference's scope, protozoa as a fixed list of protist lineages. The previous rule (root minus
+  human minus synthetic construct) still counted other animal and plant reads. And human and synthetic
+  construct are now excluded from every analysis table on both entry routes (`prepare_bracken_tables.py`),
+  with the per-sample library totals computed after the exclusion; the raw per-sample Bracken reports stay
+  published, unfiltered. **Gate decisions, analysis tables and decontam library sizes change**, most for
+  cohorts rich in vector or host reads.
+
 - **QC counts duplicate-flagged and QC-failed reads entering the analysis (review #12).** The inclusion
   policy is unchanged — a QC-fail flag on a TCGA read often means only "aligned poorly to the human
   genome", which for a microbial read is expected — but nobody knew the numbers. extractReads now tallies,

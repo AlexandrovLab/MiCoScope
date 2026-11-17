@@ -74,8 +74,10 @@ COLUMNS = [
     "pct_retained_overall",      # host-depleted / reads entering fastp (the extracted subset for BAM/CRAM)
     "pct_retained_of_library",   # host-depleted / primary records in the BAM/CRAM; NA for FASTQ
     # classification
-    # KrakenUniq clade counts: classified = root (what --consensus_min_reads gates on), which
-    # includes human (9606) and synthetic construct (32630, vectors/adapters); microbial excludes both.
+    # KrakenUniq clade counts. classified = root, including human (9606), synthetic construct
+    # (32630) and any other animal or plant reads; microbial = the summed clade counts of the
+    # --microbial_scope taxa (bacteria, archaea, fungi, fixed protozoan clades; review #14), the
+    # quantity --consensus_min_reads gates on.
     "kraken_classified_reads", "kraken_human_reads", "kraken_synthetic_reads",
     "bracken_microbial_reads", "cleared_consensus_gate",
     # Bracken species estimates for the same two taxa, and their share of all species reads
@@ -405,15 +407,38 @@ def parse_depletion(path: Path) -> dict:
 
 HUMAN_TAXID = "9606"
 SYNTHETIC_TAXID = "32630"   # "synthetic construct": UniVec/EmVec vectors, adapters, primers
+# The taxa that count as microbial (review #14): conf/microbial_scope_taxids.tsv, overridable with
+# --microbial-scope. The pipeline passes --microbial_scope, the same file Bracken.nf's gate reads.
+DEFAULT_SCOPE_PATH = Path(__file__).resolve().parents[1] / "conf" / "microbial_scope_taxids.tsv"
 
 
-def parse_krakenuniq_clades(path: Path) -> dict:
-    """Clade read counts for root, human and synthetic construct, keyed by column name.
+def load_microbial_scope(path: Path) -> set[str]:
+    """The taxids that count as microbial, from the scope TSV; comments and header skipped."""
+    scope = set()
+    with path.open() as handle:
+        for line in handle:
+            if line.startswith("#") or line.startswith("taxid\t") or not line.strip():
+                continue
+            taxid = line.split("\t", 1)[0].strip()
+            if taxid:
+                scope.add(taxid)
+    if not scope:
+        raise ValueError(f"empty microbial scope file: {path}")
+    return scope
 
-    Clade count = column 2 (taxReads) of the 9-column report; taxID is column 7. A taxon
-    the report does not list had no reads (0). Root is required: without it every value is NA.
+
+def parse_krakenuniq_clades(path: Path, scope: set[str]) -> dict:
+    """Clade read counts for root, human, synthetic construct and the microbial scope.
+
+    Clade count = column 2 of the 9-column report; taxID is column 7. A taxon the report does
+    not list had no reads (0). Root is required: without it every value is NA.
+    bracken_microbial_reads = the summed clade counts of the scope taxids (review #14): bacteria,
+    archaea, fungi and the fixed protozoan clades -- NOT root minus human/synthetic, which still
+    counted other animal and plant reads (the rule until 2026-11-16). The scope taxids are mutually
+    non-nested, so the sum never counts a read twice.
     """
     counts = {}
+    micro: dict[str, int] = {}
     with path.open() as handle:
         for line in handle:
             if line.startswith("#"):
@@ -422,21 +447,24 @@ def parse_krakenuniq_clades(path: Path) -> dict:
             if len(fields) < 9:
                 continue
             taxid, name = fields[6].strip(), fields[8].strip()
+            try:
+                clade = int(float(fields[1].strip()))
+            except ValueError:
+                continue
+            if taxid in scope and taxid not in micro:
+                micro[taxid] = clade
             key = ("root" if name == "root" else "human" if taxid == HUMAN_TAXID
                    else "synthetic" if taxid == SYNTHETIC_TAXID else None)
             if key and key not in counts:
-                try:
-                    counts[key] = int(float(fields[1].strip()))
-                except ValueError:
-                    counts[key] = None
+                counts[key] = clade
     root = counts.get("root")
     if root is None:
         return {c: NA for c in ("kraken_classified_reads", "kraken_human_reads",
                                 "kraken_synthetic_reads", "bracken_microbial_reads")}
-    human, synthetic = counts.get("human") or 0, counts.get("synthetic") or 0
-    return {"kraken_classified_reads": root, "kraken_human_reads": human,
-            "kraken_synthetic_reads": synthetic,
-            "bracken_microbial_reads": max(root - human - synthetic, 0)}
+    return {"kraken_classified_reads": root,
+            "kraken_human_reads": counts.get("human") or 0,
+            "kraken_synthetic_reads": counts.get("synthetic") or 0,
+            "bracken_microbial_reads": sum(micro.values())}
 
 
 def parse_bracken_nonmicrobial(path: Path) -> dict:
@@ -669,7 +697,9 @@ def sample_of(path: Path, suffix: str) -> str:
 
 
 def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
-          min_after_depletion: int = 0) -> list[dict]:
+          min_after_depletion: int = 0, scope: set[str] | None = None) -> list[dict]:
+    if scope is None:
+        scope = load_microbial_scope(DEFAULT_SCOPE_PATH)
     rows: dict[str, dict] = {}
 
     def row_for(sample: str) -> dict:
@@ -697,7 +727,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
         sample = sample_of(path, ".krakenuniq.report.txt")
         reads = parse_krakenuniq_microbial_reads(path)
         row = row_for(sample)
-        row.update(parse_krakenuniq_clades(path))
+        row.update(parse_krakenuniq_clades(path, scope))
         # The gate uses microbial reads (root minus human and synthetic construct), exactly as
         # Bracken.nf applies it (decision 1, 27 Oct 2026).
         micro = row.get("bracken_microbial_reads")
@@ -868,6 +898,9 @@ def main() -> int:
     parser.add_argument("--components", type=Path, default=None,
                         help="also write the per sample x taxon Bracken count-components table "
                              "(assigned / added / estimated; review #18) to this path")
+    parser.add_argument("--microbial-scope", type=Path, default=DEFAULT_SCOPE_PATH,
+                        help="the taxid TSV defining microbial reads (review #14); the pipeline "
+                             "passes --microbial_scope, the same file Bracken.nf's gate reads")
     parser.add_argument("--min-reads", type=int, default=100000,
                         help="--consensus_min_reads, for cleared_consensus_gate")
     parser.add_argument("--min-reads-after-depletion", type=int, default=0,
@@ -880,7 +913,8 @@ def main() -> int:
     args = parser.parse_args()
 
     stages = parse_stages(args.stages) if args.stages is not None else None
-    rows = build(args.inputs, args.min_reads, stages, args.min_reads_after_depletion)
+    rows = build(args.inputs, args.min_reads, stages, args.min_reads_after_depletion,
+                 load_microbial_scope(args.microbial_scope))
     with args.output.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS, delimiter="\t",
                                 extrasaction="ignore")

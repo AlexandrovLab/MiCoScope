@@ -45,7 +45,8 @@ def write_depletion(directory, sample, values=(900, 500, 300, 200)):
     (directory / f"{sample}.depletion_counts.tsv").write_text("\n".join(lines) + "\n")
 
 
-def write_krakenuniq(directory, sample, root=250000, unclassified=50000, human=None, synthetic=None):
+def write_krakenuniq(directory, sample, root=250000, unclassified=50000, human=None, synthetic=None,
+                     bacteria=None, extra=()):
     """A real KrakenUniq report: 9 columns, and BOTH rows carry rank "no rank".
 
     The earlier fixture here invented a 6-column layout with rank "U"/"R", which is why
@@ -62,6 +63,10 @@ def write_krakenuniq(directory, sample, root=250000, unclassified=50000, human=N
         lines.append(f"1.0\t{human}\t{human}\t10\t1\t0.1\t9606\tspecies\t                    Homo sapiens")
     if synthetic is not None:
         lines.append(f"1.0\t{synthetic}\t{synthetic}\t10\t1\t0.1\t32630\tspecies\t      synthetic construct")
+    if bacteria is not None:
+        lines.append(f"90.0\t{bacteria}\t10\t900\t1.0\t0.01\t2\tsuperkingdom\t  Bacteria")
+    for taxid, name, clade in extra:
+        lines.append(f"1.0\t{clade}\t{clade}\t10\t1\t0.1\t{taxid}\tclade\t  {name}")
     (directory / f"{sample}.krakenuniq.report.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -209,31 +214,40 @@ class GateTests(unittest.TestCase):
     arithmetic. Root's own clade count is the classified total.
     """
 
-    def test_gate_is_root_clade_count(self):
-        """Must match Bracken.nf exactly, or the table contradicts the pipeline."""
+    def test_gate_sums_scope_clades(self):
+        """Must match Bracken.nf exactly, or the table contradicts the pipeline (review #14)."""
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=250000, unclassified=50000)
+            write_krakenuniq(Path(tmp), "S1", root=250000, unclassified=50000, bacteria=250000)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["bracken_microbial_reads"], 250000)
             self.assertEqual(row["cleared_consensus_gate"], "true")
 
+    def test_root_alone_is_not_microbial(self):
+        """Classified reads outside the scope (review #14) carry no sample through the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            write_krakenuniq(Path(tmp), "S1", root=250000, unclassified=50000)
+            row = build_rows(tmp, min_reads=100000)["S1"]
+            self.assertEqual(row["kraken_classified_reads"], 250000)
+            self.assertEqual(row["bracken_microbial_reads"], 0)
+            self.assertEqual(row["cleared_consensus_gate"], "false")
+
     def test_unclassified_is_not_subtracted(self):
         """root and unclassified are siblings, not parent and child."""
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=250000, unclassified=900000)
+            write_krakenuniq(Path(tmp), "S1", root=250000, unclassified=900000, bacteria=250000)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["bracken_microbial_reads"], 250000)
 
     def test_below_threshold_is_false(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=42232, unclassified=85900)
+            write_krakenuniq(Path(tmp), "S1", root=42232, unclassified=85900, bacteria=42232)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["bracken_microbial_reads"], 42232)
             self.assertEqual(row["cleared_consensus_gate"], "false")
 
     def test_comment_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=150000, unclassified=10)
+            write_krakenuniq(Path(tmp), "S1", root=150000, unclassified=10, bacteria=150000)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["bracken_microbial_reads"], 150000)
 
@@ -243,7 +257,8 @@ class NonMicrobialTests(unittest.TestCase):
 
     def test_kraken_split(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=250000, human=30000, synthetic=120000)
+            write_krakenuniq(Path(tmp), "S1", root=250000, human=30000, synthetic=120000,
+                             bacteria=100000)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["kraken_classified_reads"], 250000)
             self.assertEqual(row["kraken_human_reads"], 30000)
@@ -254,7 +269,8 @@ class NonMicrobialTests(unittest.TestCase):
     def test_gate_ignores_human_and_synthetic(self):
         """Decision 1 (27 Oct 2026): 98% synthetic construct must not carry a sample through the gate."""
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=5_000_000, human=1_000, synthetic=4_950_000)
+            write_krakenuniq(Path(tmp), "S1", root=5_000_000, human=1_000, synthetic=4_950_000,
+                             bacteria=49_000)
             row = build_rows(tmp, min_reads=100000)["S1"]
             self.assertEqual(row["kraken_classified_reads"], 5_000_000)
             self.assertEqual(row["bracken_microbial_reads"], 49_000)
@@ -262,10 +278,27 @@ class NonMicrobialTests(unittest.TestCase):
 
     def test_absent_taxa_are_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
-            write_krakenuniq(Path(tmp), "S1", root=5000)
+            write_krakenuniq(Path(tmp), "S1", root=5000, bacteria=5000)
             row = build_rows(tmp)["S1"]
             self.assertEqual((row["kraken_human_reads"], row["kraken_synthetic_reads"]), (0, 0))
             self.assertEqual(row["bracken_microbial_reads"], 5000)
+
+    def test_other_animal_reads_do_not_count_as_microbial(self):
+        """Review #14: root minus human minus synthetic still counted mouse/plant reads."""
+        with tempfile.TemporaryDirectory() as tmp:
+            write_krakenuniq(Path(tmp), "S1", root=1000000, human=30000, bacteria=60000,
+                             extra=(("10090", "Mus musculus", 900000),))
+            row = build_rows(tmp, min_reads=100000)["S1"]
+            self.assertEqual(row["bracken_microbial_reads"], 60000)   # not 970,000
+            self.assertEqual(row["cleared_consensus_gate"], "false")
+
+    def test_protozoa_and_fungi_count_as_microbial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_krakenuniq(Path(tmp), "S1", root=200000, bacteria=60000,
+                             extra=(("5794", "Apicomplexa", 30000), ("4751", "Fungi", 15000)))
+            row = build_rows(tmp, min_reads=100000)["S1"]
+            self.assertEqual(row["bracken_microbial_reads"], 105000)
+            self.assertEqual(row["cleared_consensus_gate"], "true")
 
     def test_bracken_species_split(self):
         with tempfile.TemporaryDirectory() as tmp:

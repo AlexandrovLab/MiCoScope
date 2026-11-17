@@ -41,6 +41,7 @@ process qcSummary {
         --inputs . \\
         --output cmp.qc.summary.tsv \\
         --components bracken_count_components.tsv \\
+        --microbial-scope "${params.microbial_scope}" \\
         --min-reads "${params.consensus_min_reads}" \\
         --min-reads-after-depletion "${params.min_reads_after_depletion}" \\
         --stages "${stages}"

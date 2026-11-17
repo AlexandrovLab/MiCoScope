@@ -1,0 +1,23 @@
+# The taxa that count as MICROBIAL (Ludmil review #14; Ammal, 16 Nov 2026): the MetaPhlAn gate
+# (--consensus_min_reads) and the QC summary's bracken_microbial_reads sum the KrakenUniq clade
+# counts of exactly these taxids. The scope matches the validation reference's RefSeq groups
+# (bacteria, archaea, fungi, protozoa). "Protozoa" is not one NCBI clade, so it is this fixed list
+# of top-level protist lineages, covering every organism in RefSeq's protozoa section (Plasmodium,
+# Toxoplasma, Babesia, Cryptosporidium, Leishmania, Trypanosoma, Entamoeba, Acanthamoeba, Giardia,
+# Trichomonas, Naegleria, Balantidium, Blastocystis, ...). Every taxid is verified present in
+# krakenUniq_8_8_2023/taxDB with the name and rank below, and NO entry is nested inside another
+# (Fungi excluded from the protist clades; Bacteria/Archaea/eukaryote lineages disjoint), so no
+# read is ever counted twice. Viruses are deliberately NOT in scope (the consensus already excludes
+# them); human (9606) and synthetic construct (32630) were never in scope.
+taxid	name	group
+2	Bacteria	bacteria
+2157	Archaea	archaea
+4751	Fungi	fungi
+5794	Apicomplexa	protozoa
+33682	Euglenozoa	protozoa
+554915	Amoebozoa	protozoa
+5719	Parabasalia	protozoa
+207245	Fornicata	protozoa
+5752	Heterolobosea	protozoa
+5878	Ciliophora	protozoa
+12967	Blastocystis	protozoa

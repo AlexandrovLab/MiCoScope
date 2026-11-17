@@ -398,7 +398,8 @@ def render(rows, record, qc_path, validation_report=None, consensus_status=None)
         "<code>Classified reads</code> is the KrakenUniq <code>root</code> clade count, i.e. the "
         "reads classified at all. It includes "
         "<code>Human</code> (taxID 9606) and <code>Synthetic construct</code> (32630: vectors, adapters, "
-        "primers); <code>Microbial reads</code> is classified minus both, and is what <code>--consensus_min_reads</code> gates on. A sample below "
+        "primers); <code>Microbial reads</code> sums the <code>--microbial_scope</code> clades (bacteria, "
+        "archaea, fungi, protozoa), and is what <code>--consensus_min_reads</code> gates on. A sample below "
         "the gate has no MetaPhlAn profile, so its MetaPhlAn and shared columns read "
         "&mdash;. <code>Shared</code> is the per-sample intersection of the two profilers.",
         empty_when="bracken_microbial_reads",

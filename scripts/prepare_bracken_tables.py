@@ -17,9 +17,19 @@ def main():
     species_samples, species = read_counts(a.species, "s")
     if set(samples) != set(species_samples):
         raise ValueError("Bracken genus/species sample IDs differ")
-    # Preserve the existing consensus exclusion, consistently on both entry routes.
-    genus = {t: r for t, r in genus.items() if "Viruses" not in t}
-    species = {t: r for t, r in species.items() if "Viruses" not in t}
+    # Exclusions applied to every analysis table, on both entry routes: viruses (the existing
+    # consensus rule), and human and synthetic construct (Ludmil review #21; Ammal, 16 Nov 2026).
+    # Human and vector reads are not microbes of the sample, so they are not analysis rows; they
+    # stay visible in the QC summary's kraken_/bracken_ columns, and the raw per-sample Bracken
+    # reports remain published unfiltered. The library totals below are computed AFTER these
+    # exclusions, so decontam's absence evidence is judged on microbial reads.
+    def nonmicrobial(clade: str) -> bool:
+        tail = clade.rsplit("|", 1)[-1]
+        name = tail.split("__", 1)[-1].replace("_", " ").strip().lower()
+        return name in {"homo sapiens", "homo", "synthetic construct"}
+
+    genus = {t: r for t, r in genus.items() if "Viruses" not in t and not nonmicrobial(t)}
+    species = {t: r for t, r in species.items() if "Viruses" not in t and not nonmicrobial(t)}
     write_counts(a.out_genus, samples, genus)
     write_counts(a.out_species, samples, species)
     with open(a.out_library, "w", newline="") as fh:

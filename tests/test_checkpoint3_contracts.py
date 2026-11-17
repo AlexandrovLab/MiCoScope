@@ -42,6 +42,26 @@ class CountAndMask(unittest.TestCase):
         self.assertEqual(row, {"sample": "X", "bracken_genus_total": "200", "bracken_species_total": "200"})
         self.assertEqual(read_counts(self.d / "s.out", "s")[0], ["X"])
 
+    def test_human_and_synthetic_are_excluded_from_analysis_tables(self):
+        """Review #21: human and synthetic construct leave every analysis table on both entry
+        routes; the library totals are computed after the exclusion."""
+        genus = self.write("g.tsv", "#Classification\tX.bracken.G.krakenreport.txt\n"
+                           "d__Bacteria|g__G\t200\nd__Eukaryota|g__Homo\t500\n")
+        species = self.write("s.tsv", "#Classification\tX.bracken.S.krakenreport.txt\n"
+                             "d__Bacteria|g__G|s__G_a\t200\n"
+                             "d__Eukaryota|g__Homo|s__Homo_sapiens\t500\n"
+                             "s__synthetic_construct\t900\n")
+        r = self.run_script("prepare_bracken_tables.py", "--genus", genus, "--species", species,
+                            "--out_genus", "g.out", "--out_species", "s.out", "--out_library", "lib.tsv")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        _, species_rows = read_counts(self.d / "s.out", "s")
+        _, genus_rows = read_counts(self.d / "g.out", "g")
+        self.assertEqual(set(species_rows), {"d__Bacteria|g__G|s__G_a"})
+        self.assertEqual(set(genus_rows), {"d__Bacteria|g__G"})
+        with open(self.d / "lib.tsv") as f:
+            row = next(csv.DictReader(f, delimiter="\t"))
+        self.assertEqual((row["bracken_genus_total"], row["bracken_species_total"]), ("200", "200"))
+
     def test_invalid_count_schema_fails(self):
         for header, body in [
             ("X\tX", "1\t2"), ("X", ""), ("X", "NaN"), ("X", "Inf"),
@@ -131,10 +151,16 @@ class CountAndMask(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("genus table would be empty", r.stderr)
 
-    def test_root_count_missing_invalid_duplicate_and_true_zero(self):
+    def gate_shell(self):
+        """The rendered gate block, pointed at the REPO's real scope file (review #14)."""
         text = (ROOT / "Modules/Bracken.nf").read_text()
         shell = text[text.index("    MICROBIAL_READS="):text.index('    echo "Bracken microbial reads')]
-        shell = shell.replace("\\$", "$")
+        return (shell.replace("${params.microbial_scope}",
+                              str(ROOT / "conf" / "microbial_scope_taxids.tsv"))
+                     .replace("\\$", "$"))
+
+    def test_root_count_missing_invalid_duplicate_and_true_zero(self):
+        shell = self.gate_shell()
         for body, ok in [
             ("#header\n", False),
             ("0\tbad\t0\t0\t0\t0\t1\tno rank\troot\n", False),
@@ -147,15 +173,28 @@ class CountAndMask(unittest.TestCase):
                                    capture_output=True, text=True)
                 self.assertEqual(r.returncode == 0, ok, r.stderr)
 
-    def test_gate_is_microbial_reads(self):
-        """Decision 1 (27 Oct 2026): root minus human (9606) and synthetic construct (32630)."""
+    def test_missing_scope_file_fails(self):
         text = (ROOT / "Modules/Bracken.nf").read_text()
         shell = text[text.index("    MICROBIAL_READS="):text.index('    echo "Bracken microbial reads')]
-        shell = shell.replace("\\$", "$") + '\necho "$MICROBIAL_READS"'
+        shell = shell.replace("${params.microbial_scope}", str(self.d / "no_such_scope.tsv"))
+        shell = shell.replace("\\$", "$")
+        report = self.write("kraken.tsv", "0\t0\t0\t0\t0\t0\t1\tno rank\troot\n")
+        r = subprocess.run(["bash", "-eu", "-c", shell], env=dict(os.environ, REPORT=str(report)),
+                           capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("microbial scope", r.stderr)
+
+    def test_gate_is_microbial_scope_sum(self):
+        """Review #14 (16 Nov 2026): bacteria + archaea + fungi + protozoan clades. Classified
+        reads outside the scope (here a mouse row) count for nothing."""
+        shell = self.gate_shell() + '\necho "$MICROBIAL_READS"'
         body = ("1\t5000000\t0\t0\t0\t0\t1\tno rank\troot\n"
                 "1\t1000\t0\t0\t0\t0\t9606\tspecies\t      Homo sapiens\n"
-                "1\t4950000\t0\t0\t0\t0\t32630\tspecies\t    synthetic construct\n"
-                "1\t49000\t0\t0\t0\t0\t2\tsuperkingdom\t  Bacteria\n")
+                "1\t3950000\t0\t0\t0\t0\t32630\tspecies\t    synthetic construct\n"
+                "1\t1000000\t0\t0\t0\t0\t10090\tspecies\t    Mus musculus\n"
+                "1\t40000\t0\t0\t0\t0\t2\tsuperkingdom\t  Bacteria\n"
+                "1\t6000\t0\t0\t0\t0\t4751\tkingdom\t    Fungi\n"
+                "1\t3000\t0\t0\t0\t0\t5794\tphylum\t      Apicomplexa\n")
         report = self.write("kraken.tsv", body)
         r = subprocess.run(["bash", "-eu", "-c", shell], env=dict(os.environ, REPORT=str(report)),
                            capture_output=True, text=True)

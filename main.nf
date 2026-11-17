@@ -124,7 +124,11 @@ params.bracken_read_length = 'auto'  // auto: per sample, the kmer_distrib lengt
 // count. The committed value was 2; an edit had set it to ${task.cpus}, so abundance output
 // changed with the CPU count and the retry attempt (audit A04, 2026-09-23).
 params.bracken_threshold = 2
-params.consensus_min_reads = 100000  // Per-sample minimum microbial reads (KrakenUniq root - human - synthetic construct) for MetaPhlAn
+params.consensus_min_reads = 100000  // Per-sample minimum microbial reads (see --microbial_scope) for MetaPhlAn
+// The taxa that count as microbial (review #14): bacteria, archaea, fungi and a fixed list of
+// protozoan clades -- the validation reference's scope. The gate and the QC summary sum exactly
+// these KrakenUniq clade counts.
+params.microbial_scope = "${projectDir}/conf/microbial_scope_taxids.tsv"
 
 // ============================================================================
 // INPUT/OUTPUT PATHS
@@ -486,6 +490,7 @@ workflow {
         error "--bracken_read_length must be auto or a positive integer (got '${params.bracken_read_length}')"
     if (params.start_from == 'beginning' && !skipClassification) {
         requirePathParam('kraken_db', params.kraken_db, 'for KrakenUniq/Bracken classification')
+        requirePathParam('microbial_scope', params.microbial_scope, 'for the MetaPhlAn gate (review #14)')
         requirePathParam('metaphlan_db', params.metaphlan_db, 'for MetaPhlAn 4 classification')
         // Contents, not just existence (audit C17): the files these steps actually open.
         def krakenDir = file(params.kraken_db)
@@ -720,6 +725,7 @@ workflow {
                 humann3_protein_db   : Provenance.data(params.humann3_protein_db),
                 cram_reference       : Provenance.data(params.cram_reference),
                 adapters             : Provenance.code(params.adapters),
+                microbial_scope      : Provenance.code(params.microbial_scope),
                 adapters_core        : Provenance.code(params.adapters_core),
                 // Alignment validation lane (audit C06). Recorded only when it runs: the cache
                 // listing is not free on Lustre, and an unused path is not a dependency.
@@ -972,7 +978,7 @@ workflow {
 
         if (!skipClassification) {
             // BRACKEN
-            Bracken(CLASSIFICATION_READS, depsOf(["${params.scripts}/kreport2mpa.py"], [params.kraken_db]))
+            Bracken(CLASSIFICATION_READS, depsOf(["${params.scripts}/kreport2mpa.py", params.microbial_scope], [params.kraken_db]))
             Bracken.out.reports.set { BRACKEN_OUT }
 
             // Collect all kraken reports once all samples are done
@@ -1321,7 +1327,7 @@ workflow {
             (beginning && !skipClassification && !skipHumann3) ? 'humann' : null,
             (beginning && !skipHostDepletion) ? 'low_as_survival' : null,
         ].findAll { it }.join(',')
-        qcSummary(qcChannel.collect(), qcStages, depsOf(["${params.scripts}/build_qc_summary.py"]))
+        qcSummary(qcChannel.collect(), qcStages, depsOf(["${params.scripts}/build_qc_summary.py", params.microbial_scope]))
 
         // The report reads the summary table, not the results tree, so the two cannot
         // disagree about what the run produced.

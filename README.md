@@ -16,7 +16,8 @@ remove reagent contaminants, correct batch effects and profile function with HUM
    optionally a set of pangenome indexes. The T2T index (`--t2t_phix_db`) contains **no phiX** despite
    its name, so phiX spike-in is not removed ([host_depletion_references.md](docs/host_depletion_references.md)).
 3. **Classification** runs KrakenUniq and Bracken on every sample, and MetaPhlAn 4 on samples with at
-   least `--consensus_min_reads` (100,000) microbial reads (classified minus human and synthetic construct).
+   least `--consensus_min_reads` (100,000) microbial reads: bacteria, archaea, fungi and protozoa
+   (`--microbial_scope`).
 4. **Consensus** keeps the genera both profilers detect and applies that list to every sample's Bracken
    counts.
 5. **Alignment validation** *(opt-in)* aligns reads to RefSeq genomes of each species, with human in the
@@ -118,7 +119,7 @@ The main options. [`docs/parameters.md`](docs/parameters.md) lists all of them.
 | `--kraken_db`, `--metaphlan_db` | directories | For classification | classifier databases |
 | `--outdir` | `RESULTS/` in the launch directory | No | output directory |
 | `--adapter_trim` | `auto` (default), `always`, `never` | No | adapter FASTA fastp scans: `auto` = 5-sequence Illumina list for every sample; `always` = the 234-sequence list; `never` = none |
-| `--consensus_min_reads` | `100000` | No | microbial reads (classified minus human and synthetic construct) a sample needs for MetaPhlAn (and HUMAnN) |
+| `--consensus_min_reads` | `100000` | No | microbial reads (bacteria + archaea + fungi + protozoa, see `--microbial_scope`) a sample needs for MetaPhlAn (and HUMAnN) |
 | `--run_decontam` | `true` | No | decontamination; needs `--metadata_file` + role parameters |
 | `--metadata_file` | TSV/CSV path | With decontam or batch correction | per-sample metadata |
 | `--taxonomic_rank` | `genus`, `species` | With decontam or batch correction | the rank of a supplied table (`--start_from decontam` / `batch_correction`); species-first runs decontaminate species and correct both species and genus |

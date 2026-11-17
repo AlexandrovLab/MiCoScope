@@ -114,11 +114,14 @@ process Bracken {
         python "${params.scripts}"/kreport2mpa.py -r \${bracken_kraken_report} -o \${bracken_kraken_mpa_report} --display-header
     done
 
-    # Gate MetaPhlAn per sample on MICROBIAL reads: the KrakenUniq root clade count minus the human
-    # (taxID 9606) and synthetic-construct (32630: vectors, UniVec) clade counts. Until 2026-10-27 the gate
-    # used the root count alone; in CRC50, 93-99% of it was synthetic construct (10-sample regression,
-    # arm C), so the gate was deciding on vector reads (Ammal, decision 1, 27 Oct 2026). Same arithmetic as
-    # build_qc_summary.py's bracken_microbial_reads.
+    # Gate MetaPhlAn per sample on MICROBIAL reads: the summed KrakenUniq clade counts of the taxa
+    # listed in --microbial_scope -- bacteria, archaea, fungi and a fixed list of protozoan
+    # clades, the validation reference's scope (Ludmil review #14; Ammal, 16 Nov 2026). History:
+    # until 27 Oct 2026 the gate used the root count alone (93-99% synthetic construct in CRC50
+    # Baylor samples); until 16 Nov root minus human minus synthetic construct, which still counted
+    # any other animal or plant reads. The scope taxids are mutually non-nested, so nothing is
+    # counted twice. Same arithmetic as build_qc_summary.py's bracken_microbial_reads. The root row
+    # is still required as a sanity check that this is a KrakenUniq report.
     #
     # This read three things wrong and silently returned 0 for every sample from
     # 2026-09-04 until 2026-09-23, so MetaPhlAn never ran and consensus never had
@@ -131,7 +134,16 @@ process Bracken {
     #      arithmetic. Root's own clade count is the classified total.
     # taxName is trimmed before comparing, exactly as build_qc_summary.py does (audit A16), so the
     # gate and the QC column cannot disagree on a padded name.
-    MICROBIAL_READS=\$(awk -F '\t' '
+    MICROBIAL_READS=\$(awk -F '\t' -v scope_file="${params.microbial_scope}" '
+        BEGIN {
+            while ((getline line < scope_file) > 0) {
+                if (line ~ /^#/ || line ~ /^taxid\t/) continue
+                split(line, a, "\t")
+                if (a[1] != "") { want[a[1]] = 1; n_scope++ }
+            }
+            close(scope_file)
+            if (n_scope == 0) { print "ERROR: empty or unreadable microbial scope file: " scope_file > "/dev/stderr"; bad_scope = 1; exit 1 }
+        }
         !/^#/ {
             n=\$9; gsub(/^[ \t\r]+|[ \t\r]+\$/, "", n)
             t=\$7; gsub(/^[ \t\r]+|[ \t\r]+\$/, "", t)
@@ -139,17 +151,16 @@ process Bracken {
             if(n=="root") {
                 found++
                 if(NF!=9 || v !~ /^[0-9]+\$/) bad=1
-                total=v
-            } else if((t=="9606" || t=="32630") && !(t in seen)) {
+            } else if((t in want) && !(t in seen)) {
                 seen[t]=1
                 if(v !~ /^[0-9]+\$/) bad=1
-                other+=v
+                total+=v
             }
         }
         END {
+            if(bad_scope) exit 1
             if(found!=1 || bad) { print "ERROR: expected exactly one valid KrakenUniq root count" > "/dev/stderr"; exit 1 }
-            m=total-other; if(m<0) m=0
-            print m
+            print total+0
         }' "\${REPORT}")
     echo "Bracken microbial reads for ${SAMPLE_NAME}: \${MICROBIAL_READS}"
     if [[ "\${MICROBIAL_READS}" -ge "${params.consensus_min_reads}" ]]; then

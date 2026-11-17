@@ -192,9 +192,12 @@ def depletion(d, s, reads):
 
 
 def kraken(d, s, root):
+    # All classified reads are bacterial here, so `root` is also the microbial scope sum the
+    # MetaPhlAn gate uses (review #14).
     write(d / f"{s}.krakenuniq.report.txt",
           "#comment\n%\treads\ttaxReads\tkmers\tdup\tcov\ttaxID\trank\ttaxName\n"
-          f"10\t5\t5\t0\t0\t0\t0\tno rank\tunclassified\n90\t{root}\t0\t0\t0\t0\t1\tno rank\troot\n")
+          f"10\t5\t5\t0\t0\t0\t0\tno rank\tunclassified\n90\t{root}\t0\t0\t0\t0\t1\tno rank\troot\n"
+          f"90\t{root}\t10\t0\t0\t0\t2\tsuperkingdom\t  Bacteria\n")
 
 
 def bracken(d, s, called=True):

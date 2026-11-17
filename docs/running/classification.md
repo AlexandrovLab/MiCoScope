@@ -91,11 +91,15 @@ which is common for RNA-seq BAMs written without STAR's `--outSAMunmapped Within
 ## Classification and consensus
 
 KrakenUniq and Bracken run first for every sample. The sample's **microbial** read count is a
-per-sample gate: the clade count of the `root` row of its KrakenUniq report minus the human
-(taxID 9606) and *synthetic construct* (32630) clade counts.
+per-sample gate: the summed KrakenUniq clade counts of the taxa in `--microbial_scope`
+(`conf/microbial_scope_taxids.tsv`) -- bacteria, archaea, fungi and a fixed list of protozoan
+clades, the same scope the validation reference covers (review #14). The taxids are mutually
+non-nested, so no read is counted twice.
 **MetaPhlAn 4 runs only when that count is at least `--consensus_min_reads` (100000).**
-Until 27 Oct 2026 the gate used the `root` count alone, which in CRC50 was 94-99% synthetic
-construct, so vector reads decided which samples reached MetaPhlAn.
+History: until 27 Oct 2026 the gate used the `root` count alone, which in CRC50 was 94-99%
+synthetic construct, so vector reads decided which samples reached MetaPhlAn; until 16 Nov 2026 it
+used root minus human minus synthetic construct, which still counted any other animal or plant
+reads.
 Samples below the gate are logged and skip MetaPhlAn, and therefore HUMAnN3 too (see
 *Functional profiling*). Their Bracken counts still go forward. The QC summary's
 `bracken_microbial_reads` and `cleared_consensus_gate` columns show, per sample, the count and
