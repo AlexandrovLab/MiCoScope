@@ -105,14 +105,14 @@ Samples below the gate are logged and skip MetaPhlAn, and therefore HUMAnN3 too 
 `bracken_microbial_reads` and `cleared_consensus_gate` columns show, per sample, the count and
 whether it cleared. `kraken_classified_reads` (the `root` count) includes reads classified as human (`kraken_human_reads`, taxID
 9606) and as synthetic construct (`kraken_synthetic_reads`, 32630: vectors, adapters, primers);
-`bracken_microbial_reads` is the classified count minus both. `bracken_human_reads`,
+`bracken_microbial_reads` is the scope sum described above, not derived from these two. `bracken_human_reads`,
 `bracken_synthetic_reads` and their `pct_bracken_*` give the same two taxa from the Bracken
 species table, as a share of all species-level reads.
 
 | Parameter | Default | Meaning |
 |---|---|---|
 | `--consensus_min_reads` | `100000` | the MetaPhlAn gate above; a non-negative integer (`1e5` is rejected) |
-| `--bracken_read_length` | `50` | Bracken `-r`; the Kraken database must hold a `database<N>mers.kmer_distrib` for it, checked at launch |
+| `--bracken_read_length` | `auto` | Bracken `-r`. `auto`: per sample, the median read length of the first 1,000,000 host-depleted reads entering KrakenUniq picks the closest `database<N>mers.kmer_distrib` (ties go shorter), written to `<sample>.bracken_read_length.tsv`. An integer forces one length for every sample, checked against the database at launch |
 | `--bracken_threshold` | `2` | Bracken `-t`: the minimum reads a taxon needs to be re-estimated. A read threshold, not a thread count. A thin sample in which no taxon reaches it gets an empty no-call table instead of failing the run |
 
 ```bash
