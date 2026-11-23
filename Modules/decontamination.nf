@@ -27,11 +27,11 @@ process Decontamination {
     // runs once per level on the validated tables; otherwise it is --taxonomic_rank.
     // library_sizes may be the very same file as otu_table (consensus skipped), so it is staged
     // under its own folder to avoid a name collision.
-    tuple val(prefix), path(otu_table), path(metadata), path(library_sizes, stageAs: 'library/*'), val(rank)
+    tuple val(prefix), path(otu_table), path(metadata), path(library_sizes, stageAs: 'library/*'), val(rank), val(input_source)
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple val(prefix),
@@ -48,6 +48,7 @@ process Decontamination {
     tuple val(prefix),
           path("${prefix}.decontam_pkg_decontaminated.csv"),
           path("${prefix}.validated_metadata.tsv"), emit: for_batch_correction
+    path("${prefix}.decontam_report"), emit: report_evidence
 
     script:
     def library_arg = library_sizes ? "--library_table \"${library_sizes}\"" : ""
@@ -60,6 +61,7 @@ process Decontamination {
         --otu_table "${otu_table}" \\
         --metadata "${metadata}" \\
         --prefix "${prefix}" \\
+        --input_source "${input_source}" \\
         --start_mode "${params.start_from}" \\
         --environment_spec "${params.decontam_env}" \\
         --nextflow_version "${workflow.nextflow.version}" \\
@@ -97,12 +99,14 @@ process aggregateDecontaminatedSpecies {
     tuple val(prefix), path("${prefix}.decontam_pkg_decontaminated.genus.csv"), path(metadata), emit: genus
     // Species without a genus parent: kept in the species table, listed here, not summed.
     path("${prefix}.genus_rollup_excluded.tsv"), emit: excluded
+    path("${prefix}.genus_rollup_status.tsv"), emit: status
     script:
     """
     ${ToolVersions.record(task, params, 'python')}
     python "${params.scripts}/aggregate_decontaminated_species.py" \\
         --input "${species_table}" --output "${prefix}.decontam_pkg_decontaminated.genus.csv" \\
         --excluded "${prefix}.genus_rollup_excluded.tsv" \\
+        --status "${prefix}.genus_rollup_status.tsv" \\
         --taxon_column "${params.taxon_column}"
     """
 }

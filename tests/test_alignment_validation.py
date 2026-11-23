@@ -424,7 +424,8 @@ class Wiring(unittest.TestCase):
         self.assertIn("include { validationSpeciesList; buildValidationRef; alignForValidation;", text)
         # Validation feeds the masked species table to species-first decontamination.
         self.assertIn("VALIDATED_SPECIES.set { PRIMARY_SPECIES }", text)
-        self.assertIn("tuple('species_run', table, meta, library, 'species')", text)
+        # The sixth element names the table decontamination received (shown in the cohort report).
+        self.assertIn("tuple('species_run', table, meta, library, 'species',", text)
         mod = (ROOT / "Modules" / "alignment_validation.nf").read_text()
         self.assertIn('grep -c "loaded/built the index"', mod)       # one-part index guard
         self.assertIn('storeDir { "${params.validation_cache_dir}/ref-${ref_key}" }', mod)

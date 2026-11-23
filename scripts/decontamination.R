@@ -99,6 +99,7 @@ option_list <- list(
   make_option("--metadata", type = "character"),
   make_option("--prefix", type = "character"),
   make_option("--start_mode", type = "character"),
+  make_option("--input_source", type = "character", default = "provided_count_table"),
   make_option("--environment_spec", type = "character"),
   make_option("--nextflow_version", type = "character"),
   make_option("--taxon_column", type = "character"),
@@ -128,10 +129,10 @@ option_list <- list(
   make_option("--unevaluable_policy", type = "character", default = "skip"),
   # Minimum upstream library (Bracken total) for an all-zero sample to count as evidence of
   # ABSENCE. Below it the sample could not have shown presence either way, so it is excluded
-  # as insufficient_library and leaves the prevalence denominator (audit A06/A18; Ammal: 1000).
+  # as insufficient_library and leaves the prevalence denominator (default 1000 reads).
   make_option("--min_library", type = "double", default = 1000),
   # A zero-total sample whose library size is unknown (no --library_table, or a missing row)
-  # stops the run unless this is set (audit A07).
+  # stops the run unless this is set.
   make_option("--allow_unknown_library", action = "store_true", default = FALSE),
   # June-Young's known-contaminant species (ref/known_contaminants.tsv). A FLAG only: listed taxa are
   # marked in filter_report/contaminants_final and their per-sample read share is reported; nothing
@@ -215,6 +216,11 @@ if (anyDuplicated(taxon_ids)) {
   stopf("Duplicate taxon IDs: %s", collapse_values(duplicates))
 }
 
+terminal_rank <- if (args$taxonomic_rank == "species") "s" else "g"
+if (any(!grepl(paste0("(^|\\|)", terminal_rank, "__[^|]+$"), taxon_ids))) {
+  stopf("Taxon IDs must terminate at the declared %s rank", args$taxonomic_rank)
+}
+
 count_columns <- lapply(sample_columns, function(sample_id) {
   raw_values <- otu_raw[[sample_id]]
   trimmed <- trimws(raw_values)
@@ -237,6 +243,7 @@ count_matrix <- do.call(cbind, count_columns)
 rownames(count_matrix) <- taxon_ids
 colnames(count_matrix) <- sample_columns
 storage.mode(count_matrix) <- "numeric"
+report_input_counts <- count_matrix  # Reporting snapshot before any removal (copy-on-write).
 
 # Pre-decontam removal (--remove_taxa). Exact names, ignoring case and space/underscore; the last
 # rank of a clade_name (s__ or g__) is what is compared.
@@ -248,8 +255,7 @@ removed_taxa <- taxon_ids[last_rank_name(taxon_ids) %in% remove_names]
 removed_reads <- colSums(count_matrix[removed_taxa, , drop = FALSE])
 if (length(removed_taxa) > 0L) {
   count_matrix <- count_matrix[setdiff(taxon_ids, removed_taxa), , drop = FALSE]
-  taxon_ids <- rownames(count_matrix)
-  if (length(taxon_ids) == 0L) stopf("No taxa left after --remove_taxa")
+  taxon_ids <- as.character(rownames(count_matrix))
 }
 
 required_metadata_columns <- c(args$sample_id_column, args$batch_column, args$type_column)
@@ -293,7 +299,7 @@ if (!(args$zero_total_policy %in% c("keep", "drop"))) {
 # contaminated than they are. So with policy `keep` such samples stay in, and only a truly EMPTY
 # library (zero Bracken reads upstream, per --library_table) is excluded. Policy `drop`
 # restores the earlier behaviour of excluding every zero-total sample.
-# "Zero-total" is judged AFTER the --min_abundance filter (decision 24, audit A06): a near-empty
+# "Zero-total" is judged AFTER the --min_abundance filter: a near-empty
 # library whose few reads all fall below min_abundance is all-zero in what the prevalence test
 # sees, so it gets the same --min_library check as a sample that was all-zero on input.
 sample_totals <- colSums(count_matrix * (count_matrix >= args$min_abundance))
@@ -408,17 +414,6 @@ batch_eligibility <- do.call(rbind, lapply(batch_levels, function(batch_id) {
 }))
 
 eligible_batches <- batch_eligibility$batch[batch_eligibility$eligible]
-if (length(eligible_batches) < args$min_batches) {
-  write_tsv(batch_eligibility, sprintf("%s.batch_eligibility.tsv", args$prefix))
-  details <- paste0(
-    "batch ", batch_eligibility$batch, "(positive=", batch_eligibility$n_positive,
-    ",control=", batch_eligibility$n_control, ",total=", batch_eligibility$n_total,
-    ",eligible=", batch_eligibility$eligible, ",reason=", batch_eligibility$reason, ")"
-  )
-  stopf("Eligible batches %d below required %d: %s [before batching: %d zero-total sample(s) excluded, %d kept, policy=%s]",
-        length(eligible_batches), args$min_batches, paste(details, collapse = "; "),
-        length(excluded_zero_samples), length(kept_zero_samples), args$zero_total_policy)
-}
 
 selected_counts <- count_matrix[, selected_samples, drop = FALSE]
 initial_taxon_sums <- rowSums(selected_counts)
@@ -430,9 +425,18 @@ filtered_taxon_presence <- rowSums(filtered_counts > 0)
 filtered_prevalence <- filtered_taxon_presence / ncol(filtered_counts)
 passes_prevalence <- filtered_taxon_sums > 0 & filtered_prevalence >= args$min_prevalence
 evaluated_taxa <- taxon_ids[passes_prevalence]
-if (length(evaluated_taxa) == 0L) {
-  stopf("Zero taxa remain for contaminant evaluation after declared filters")
+if (length(evaluated_taxa) > 0L && length(eligible_batches) < args$min_batches) {
+  write_tsv(batch_eligibility, sprintf("%s.batch_eligibility.tsv", args$prefix))
+  details <- paste0(
+    "batch ", batch_eligibility$batch, "(positive=", batch_eligibility$n_positive,
+    ",control=", batch_eligibility$n_control, ",total=", batch_eligibility$n_total,
+    ",eligible=", batch_eligibility$eligible, ",reason=", batch_eligibility$reason, ")"
+  )
+  stopf("Eligible batches %d below required %d: %s [before batching: %d zero-total sample(s) excluded, %d kept, policy=%s]",
+        length(eligible_batches), args$min_batches, paste(details, collapse = "; "),
+        length(excluded_zero_samples), length(kept_zero_samples), args$zero_total_policy)
 }
+
 
 # decontam::isContaminant() removes every sample with zero total counts before testing ("Removed
 # N samples with zero total counts"), because it first normalises counts to frequencies. For the
@@ -448,7 +452,7 @@ per_taxon_prevalence <- function(counts, is_neg) {
   data.frame(p = p, p.prev = p, contaminant = !is.na(p) & p < args$threshold,
              row.names = rownames(counts), check.names = FALSE)
 }
-if (args$zero_total_policy == "keep") {
+if (length(evaluated_taxa) > 0L && args$zero_total_policy == "keep") {
   if (is.null(prevalence_test)) {
     stopf("decontam %s has no internal isContaminantPrevalence(); --zero_total_policy keep cannot run. Use drop, or pin decontam 1.22.0",
           as.character(packageVersion("decontam")))
@@ -470,7 +474,11 @@ if (args$zero_total_policy == "keep") {
   }
 }
 
-contaminants_by_batch <- do.call(rbind, lapply(eligible_batches, function(batch_id) {
+contaminants_by_batch <- if (length(evaluated_taxa) == 0L) {
+  data.frame(taxon_id = character(), batch = character(), n_positive = integer(),
+             n_control = integer(), p = numeric(), p_prev = numeric(),
+             evaluation_status = character(), contaminant = logical(), stringsAsFactors = FALSE)
+} else do.call(rbind, lapply(eligible_batches, function(batch_id) {
   batch_samples <- selected_samples[selected_batches == batch_id]
   batch_roles <- validated_roles[selected_batches == batch_id]
   batch_counts <- filtered_counts[evaluated_taxa, batch_samples, drop = FALSE]
@@ -573,7 +581,7 @@ final_contaminants <- evaluated_taxa[final_contaminant_flag]
 
 # How many eligible batches could actually TEST each taxon (present in >= 2 samples there). With
 # unevaluable_policy skip, a taxon testable in fewer than min_batches batches can never be called,
-# however contaminant-like it is; `callable` makes that visible (audit A19).
+# however contaminant-like it is; `callable` makes that visible.
 n_evaluable_batches <- vapply(evaluated_taxa, function(taxon_id) {
   sum(contaminants_by_batch$taxon_id == taxon_id & contaminants_by_batch$evaluation_status == "evaluated")
 }, integer(1))
@@ -581,7 +589,7 @@ contaminants_final <- data.frame(
   taxon_id = evaluated_taxa,
   detected_batch_count = detected_batch_count,
   detected_batches = detected_batch_list,
-  min_batches = args$min_batches,
+  min_batches = rep(args$min_batches, length(evaluated_taxa)),
   n_evaluable_batches = n_evaluable_batches,
   callable = n_evaluable_batches >= args$min_batches,
   final_contaminant = final_contaminant_flag,
@@ -620,10 +628,10 @@ filter_report <- data.frame(
   after_abundance_presence = filtered_taxon_presence,
   after_abundance_prevalence = filtered_prevalence,
   passes_prevalence = passes_prevalence,
-  detected_batch_count = 0L,
-  detected_batches = "",
-  final_action = "remove",
-  terminal_reason = "",
+  detected_batch_count = rep(0L, length(taxon_ids)),
+  detected_batches = rep("", length(taxon_ids)),
+  final_action = rep("remove", length(taxon_ids)),
+  terminal_reason = rep("", length(taxon_ids)),
   stringsAsFactors = FALSE
 )
 eval_index <- match(evaluated_taxa, filter_report$taxon_id)
@@ -653,6 +661,10 @@ for (i in seq_len(nrow(filter_report))) {
   }
 }
 
+result_status <- if (nrow(final_counts) == 0L) "valid_empty" else "nonempty"
+result_reason <- if (length(evaluated_taxa) == 0L) "no_taxa_after_filters" else if (
+  nrow(final_counts) == 0L) "no_taxa_after_decontamination" else "retained_taxa"
+
 all_validation_ids <- c(sample_columns, metadata_ids[!(metadata_ids %in% sample_columns)])
 sample_validation <- data.frame(
   sample_id = all_validation_ids,
@@ -660,6 +672,7 @@ sample_validation <- data.frame(
   in_metadata = all_validation_ids %in% metadata_ids,
   initial_total_count = NA_real_,
   sample_type = NA_character_,
+  batch = NA_character_,
   role = NA_character_,
   final_total_count = NA_real_,
   final_status = NA_character_,
@@ -670,6 +683,8 @@ otu_match <- match(sample_validation$sample_id, sample_columns)
 meta_match <- match(sample_validation$sample_id, metadata_ids)
 sample_validation$initial_total_count[!is.na(otu_match)] <- sample_totals[otu_match[!is.na(otu_match)]]
 sample_validation$sample_type[!is.na(meta_match)] <- metadata_raw[[args$type_column]][meta_match[!is.na(meta_match)]]
+# Batch per sample, so the cohort report can show read depth by batch and sample type.
+sample_validation$batch[!is.na(meta_match)] <- as.character(metadata_raw[[args$batch_column]][meta_match[!is.na(meta_match)]])
 for (i in seq_len(nrow(sample_validation))) {
   sample_id <- sample_validation$sample_id[i]
   if (sample_id %in% excluded_zero_samples) {
@@ -690,12 +705,16 @@ for (i in seq_len(nrow(sample_validation))) {
   }
 }
 
+# Keep cohort inclusion separate from the result: zero taxa is not a failed sample.
+sample_validation$result_status <- ifelse(sample_validation$final_status == "included", result_status, "not_applicable")
+sample_validation$result_reason <- ifelse(sample_validation$final_status == "included", result_reason, sample_validation$reason)
+
 # Which included samples were all-zero in the input table (kept as absence evidence).
 sample_validation$zero_total_input <- sample_validation$sample_id %in% zero_total_samples
 sample_validation$reads_removed_pre_decontam <- unname(removed_reads[sample_validation$sample_id])
 sample_validation$reads_removed_pre_decontam[is.na(sample_validation$reads_removed_pre_decontam)] <- 0
-# Share of each sample's input reads (before any filter) on June-Young's list: the per-sample
-# reagent-contamination check (Ludmil, check 16). NA at genus rank or without a list.
+# Per-sample list share AFTER declared taxon removal and BEFORE abundance/prevalence.
+# Count units follow the input table; this flag does not prove contamination.
 known_reads <- if (flag_known) colSums(count_matrix[is_known, , drop = FALSE]) else NULL
 input_reads <- colSums(count_matrix)
 col_of <- match(sample_validation$sample_id, colnames(count_matrix))
@@ -747,10 +766,15 @@ tryCatch({
           main = "Decontamination batch eligibility")
   legend("topright", legend = c("Positive", "Control"),
          fill = c("#B54A35", "#2E6F9E"), bty = "n")
+  if (length(evaluated_taxa) > 0L) {
   detected_per_batch <- tapply(contaminants_by_batch$contaminant,
                                contaminants_by_batch$batch, sum)
   barplot(detected_per_batch, col = "#C8902F", xlab = "Eligible batch",
           ylab = "Contaminant calls", main = "Per-batch contaminant calls")
+  } else {
+    plot.new()
+    text(0.5, 0.5, "No taxa after declared filters; decontam testing skipped")
+  }
   pk <- suppressWarnings(as.numeric(sample_validation$pct_known_contaminant))
   if (flag_known && any(!is.na(pk))) {
     hist(pk, breaks = 20, col = "#7A6A9E", xlab = "% of sample reads on the known-contaminant list",
@@ -760,7 +784,7 @@ tryCatch({
   grDevices::dev.off()
 })
 
-analysis_status <- if (any(contaminants_final$callable)) "evaluated" else "insufficient_evidence"
+analysis_status <- if (length(evaluated_taxa) == 0L) "not_run_no_taxa_after_filters" else if (any(contaminants_final$callable)) "evaluated" else "insufficient_evidence"
 summary_lines <- c(
   "DECONTAMINATION SUMMARY",
   "=======================",
@@ -783,6 +807,7 @@ summary_lines <- c(
   sprintf("Eligible batches: %d", length(eligible_batches)),
   sprintf("Taxa after abundance/prevalence filters: %d", length(evaluated_taxa)),
   sprintf("Analysis status: %s", analysis_status),
+  sprintf("Result status: %s (%s)", result_status, result_reason),
   sprintf("Callable taxa: %d / %d", sum(contaminants_final$callable), nrow(contaminants_final)),
   sprintf("Final contaminants: %d", length(final_contaminants)),
   if (flag_known) sprintf("Known-contaminant list: %d species; %d in the input table, %d of them called contaminant by decontam; median %s%% of sample reads",
@@ -801,7 +826,7 @@ conda_history <- if (nzchar(conda_prefix)) file.path(conda_prefix, "conda-meta",
 script_completed_utc <- format(Sys.time(), tz = "UTC", usetz = TRUE)
 manifest <- data.frame(
   key = c(
-    "status", "analysis_status", "prefix", "start_mode", "taxonomic_rank", "taxon_column", "sample_id_column",
+    "status", "analysis_status", "result_status", "result_reason", "prefix", "start_mode", "taxonomic_rank", "taxon_column", "sample_id_column",
     "batch_column", "type_column", "control_role", "positive_values", "control_values",
     "unselected_type_policy", "zero_total_policy", "unevaluable_policy", "min_library",
     "allow_unknown_library", "library_table_sha256",
@@ -813,7 +838,7 @@ manifest <- data.frame(
     "phyloseq_version", "optparse_version", "digest_version", "started_utc", "completed_utc"
   ),
   value = c(
-    "completed", analysis_status, args$prefix, args$start_mode, args$taxonomic_rank, args$taxon_column,
+    "completed", analysis_status, result_status, result_reason, args$prefix, args$start_mode, args$taxonomic_rank, args$taxon_column,
     args$sample_id_column, args$batch_column, args$type_column, args$control_role,
     paste(positive_values, collapse = ","), paste(control_values, collapse = ","),
     args$unselected_type_policy, args$zero_total_policy, args$unevaluable_policy, args$min_library,
@@ -848,7 +873,9 @@ manifest <- rbind(
     stringsAsFactors = FALSE
   )
 )
+source(file.path(dirname(script_path), "decontam_report_evidence.R"), local = TRUE)
 write_tsv(manifest, output_files[["run_manifest"]])
+if (!file.copy(output_files[["run_manifest"]], file.path(report_dir, "manifest.tsv"))) stopf("Report manifest copy failed")
 
 cat(sprintf(
   "Decontamination completed: %d selected samples, %d eligible batches, %d final contaminants, %d retained taxa\n",

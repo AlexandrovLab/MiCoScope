@@ -344,6 +344,11 @@ def requirePathParam(String name, value, String why) {
 // first are ignored"). So the entry workflow resolves each flag into a local via
 // boolParam() below, and reads the local rather than the param.
 
+def checkFullDecontamRank(p) {
+    if (p.start_from == 'beginning' && p.taxonomic_rank != 'species')
+        error "Full-run decontamination requires --taxonomic_rank species"
+}
+
 def metadataColumns(String header) {
     def delimiter = header.contains('\t') ? '\t' : ','
     // No loops: the Nextflow 26 strict parser rejects both C-style `for` and `while`. Split on
@@ -584,6 +589,7 @@ workflow {
         if (!(params.taxonomic_rank in ['genus', 'species'])) {
             error "--taxonomic_rank must be one of: genus, species (got '${params.taxonomic_rank}')"
         }
+        checkFullDecontamRank(params)
         def controlRole = requireRoleParam('control_role', params.control_role)
         if (!(controlRole in ['experimental_blank', 'surrogate_biological'])) {
             error "Invalid --control_role '${controlRole}'; expected experimental_blank or surrogate_biological"
@@ -1230,7 +1236,7 @@ workflow {
             requirePathParam('consensus_otu_table', params.consensus_otu_table, 'for standalone decontamination')
             Channel.of(tuple('decontam_run', file(params.consensus_otu_table), meta,
                 params.decontam_library_sizes ? file(params.decontam_library_sizes, checkIfExists: true) : [],
-                params.taxonomic_rank)).set { ch_for_decontam }
+                params.taxonomic_rank, 'provided_count_table')).set { ch_for_decontam }
         } else if (params.start_from == 'beginning' && !skipClassification) {
             // Species is the primary decontamination input, independent of the desired final rank.
             BRACKEN_FILES.map { genus, species, library -> library }.set { DECONTAM_LIBRARY }
@@ -1242,16 +1248,18 @@ workflow {
                 BRACKEN_FILES.map { genus, species, library -> species }.set { PRIMARY_SPECIES }
             }
             PRIMARY_SPECIES.combine(DECONTAM_LIBRARY)
-                .map { table, library -> tuple('species_run', table, meta, library, 'species') }
+                .map { table, library -> tuple('species_run', table, meta, library, 'species',
+                    runValidation ? 'alignment_validated_species' : (!skipConsensus ? 'consensus_or_bracken_passthrough_species' : 'bracken_species')) }
                 .set { ch_for_decontam }
         } else {
             error "Decontamination needs classification output or --start_from decontam"
         }
-        Decontamination(ch_for_decontam, depsOf([params.decontam_script, params.known_contaminants].findAll()))
+        Decontamination(ch_for_decontam, depsOf([params.decontam_script, "${params.scripts}/decontam_report_evidence.R", params.known_contaminants].findAll()))
         qcParts << Decontamination.out.decontaminated.map { it[3] }
         if (params.start_from == 'beginning' || params.taxonomic_rank == 'species') {
             aggregateDecontaminatedSpecies(Decontamination.out.for_batch_correction,
                 depsOf(["${params.scripts}/aggregate_decontaminated_species.py", "${params.scripts}/count_tables.py"]))
+            qcParts << aggregateDecontaminatedSpecies.out.status
             // Both ranks go on to batch correction: the species table and the genus table summed from it.
             Decontamination.out.for_batch_correction
                 .map { prefix, table, metadata -> tuple(prefix, table, metadata, 'species') }
@@ -1339,12 +1347,7 @@ workflow {
     // last so every contributing channel exists; a stage that did not run simply leaves
     // its columns NA.
     if (qcParts) {
-        // Folded by hand, and seeded from the first element rather than
-        // Channel.empty(), because of two parser constraints pulling opposite ways:
-        // Nextflow 25+ rejects the spread operator `mix(*qcParts)` and `for` loops,
-        // while 24.10 rejects `def x = Channel.empty()` inside the entry workflow
-        // ("Variable `Channel` already defined in the process scope"). This form
-        // compiles on both.
+        // Seed from the first channel: compatible with Nextflow 24.10 and 25+ parsers.
         def qcChannel = qcParts.first()
         qcParts.drop(1).each { part -> qcChannel = qcChannel.mix(part) }
         // The per-sample stages this run requested, in order, so the QC summary can name the stage a

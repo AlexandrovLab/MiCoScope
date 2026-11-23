@@ -17,6 +17,7 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--excluded", required=True, help="TSV of species left out of the genus table")
     ap.add_argument("--taxon_column", default="clade_name")
+    ap.add_argument("--status", help="Optional per-sample roll-up status TSV")
     a = ap.parse_args()
     samples, species = read_counts(a.input, "s", delimiter=",", taxon_column=a.taxon_column)
     genus, excluded = {}, []
@@ -29,13 +30,18 @@ def main():
         row = genus.setdefault(parent, {s: 0 for s in samples})
         for s in samples:
             row[s] += counts[s]
-    if not genus:
-        raise ValueError("No surviving species has a genus parent; the genus table would be empty")
     write_counts(a.output, samples, genus, delimiter=",", taxon_column=a.taxon_column)
     with open(a.excluded, "w", newline="") as fh:
         out = csv.writer(fh, delimiter="\t", lineterminator="\n")
         out.writerow(["taxon", "reason", "total_count", "samples_present"])
         out.writerows(excluded)
+    if a.status:
+        status, reason = ("completed", "summed_surviving_species") if genus else (
+            ("not_applicable", "no_genus_parent") if species else ("valid_empty", "no_surviving_species"))
+        with open(a.status, "w", newline="") as fh:
+            out = csv.writer(fh, delimiter="\t", lineterminator="\n")
+            out.writerow(["sample", "status", "reason"])
+            out.writerows((sample, status, reason) for sample in samples)
     print(f"Genus roll-up: {len(genus)} genera from {len(species) - len(excluded)} species; "
           f"{len(excluded)} species without a genus parent left out (see {a.excluded})")
 
