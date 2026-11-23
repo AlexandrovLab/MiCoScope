@@ -44,11 +44,21 @@ process metaphlan4 {
     # Actual execution
     gzip -dc ${inputs} > "${SAMPLE_NAME}.trimmed.fastq"
 
+    # MetaPhlAn 4.2 renamed --bowtie2db to --db_dir and --bowtie2out to --mapout (the 4.2.x
+    # binary rejects the old names: "unrecognized arguments", vJan26 arm, 22 Nov 2026).
+    # --index, -s, -o, --nproc and --input_type are unchanged. Detect the dialect from the
+    # installed binary so one module serves 4.1 and 4.2 (review #15).
+    if metaphlan --help 2>&1 | grep -q -- '--db_dir'; then
+        DB_FLAG=--db_dir; MAP_FLAG=--mapout
+    else
+        DB_FLAG=--bowtie2db; MAP_FLAG=--bowtie2out
+    fi
+
     # Run MetaPhlAn4
     metaphlan "${SAMPLE_NAME}.trimmed.fastq" \\
-        --bowtie2db "${params.metaphlan_db}" \\
+        "\$DB_FLAG" "${params.metaphlan_db}" \\
         --index ${params.metaphlan_index} \\
-        --bowtie2out "${SAMPLE_NAME}.metagenome.bowtie2.bz2" \\
+        "\$MAP_FLAG" "${SAMPLE_NAME}.metagenome.bowtie2.bz2" \\
         -s "${SAMPLE_NAME}.sam.bz2" \\
         --nproc ${task.cpus} \\
         --input_type fastq \\
