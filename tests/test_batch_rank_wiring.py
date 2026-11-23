@@ -39,7 +39,9 @@ class BatchRankWiring(unittest.TestCase):
         self.assertIn('path("${rank}.batch_sample_status.tsv"), emit: qc_status', self.module)
 
     def test_batch_ledger_reaches_the_qc_summary(self):
-        self.assertIn("qcParts << BatchCorrection.out.qc_status", self.main)
+        # The batch steps run in the BATCH_CORRECTION sub-workflow (kept out of the size-limited entry block).
+        self.assertIn("qc_status = BatchCorrection.out.qc_status", self.main)
+        self.assertIn("qcParts << BATCH_CORRECTION.out.qc_status", self.main)
 
 
 if __name__ == "__main__":

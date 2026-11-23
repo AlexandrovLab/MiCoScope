@@ -22,7 +22,7 @@ repository.
   `Remote*`/`Github*` fields that record the commit (`conda_envs/recipes/r-conqur/build.sh`);
   cqrReg is built as distributed.
 - Both programs come with no warranty; see their licenses.
-- **Run-time modification of ConQuR (2026-10-06, audit K04).** `scripts/batch_contract.R`
+- **Run-time modification of ConQuR (2026-10-06).** `scripts/batch_contract.R`
   (`guarded_tune_conqur`) makes a modified copy of `Tune_ConQuR` in memory each time batch
   correction runs; this guard remains separate from the package compatibility patch below. Two statements are changed. (1) The adonis2
   benchmark of the uncorrected table gets the same single-batch guard that ConQuR already applies
@@ -35,4 +35,4 @@ repository.
   and named R2 extraction, preserving legacy sequential evaluation. `RemoteSha` still identifies
   upstream ff233085; `CMPipelinePatch` separately identifies our GPL-3 modification.
   Other exported ConQuR functions are outside the pipeline's used tuning path and were not migrated.
-  The runtime K04 guard matches the patched expression exactly. Batch environment pins vegan2.6-10.
+  The runtime single-batch guard matches the patched expression exactly. Batch environment pins vegan2.6-10.

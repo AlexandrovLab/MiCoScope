@@ -72,7 +72,7 @@ params.batch_column = "shipment_batch"
 // tumours for that subsetting. NOT the same question as decontamination's
 // --positive_values, which means "not a control" and in TCGA includes Solid Tissue Normal.
 // Renamed 2026-09-22 so the two cannot be confused. See MERGE_CHECKLIST 3.2.
-params.batch_corr_tumor_values = "Tumor"
+// Default set below the role parameters: the TCGA preset names its tumours "Primary Tumor".
 // A failed batch correction stops the run (audit A01). true = continue with the raw counts,
 // published as corrected/UNCORRECTED_passthrough.tsv, never as ConQuR_tuned.tsv.
 params.batch_corr_allow_uncorrected = false
@@ -105,6 +105,24 @@ params.type_column = params.cohort_preset == 'tcga' ? 'Sample Type_x' : 'sample_
 params.control_role    = params.cohort_preset == 'tcga' ? 'surrogate_biological' : null
 params.positive_values = params.cohort_preset == 'tcga' ? 'Primary Tumor,Solid Tissue Normal' : null
 params.control_values  = params.cohort_preset == 'tcga' ? 'Blood Derived Normal' : null
+// Batch correction only, when --tumor_only is set: which sample types count as tumours. The TCGA
+// preset uses the TCGA label; otherwise "Tumor". A CLI value wins.
+params.batch_corr_tumor_values = params.cohort_preset == 'tcga' ? 'Primary Tumor' : 'Tumor'
+// Decontamination controls (--control_values) are QC material: they leave batch correction and the
+// analyses after it unless a run deliberately keeps them.
+params.downstream_include_controls = false
+// Mixed sample types: add sample type as a protected covariate when every batch holds two or more
+// types; false records the choice instead.
+params.batch_corr_protect_sample_type = true
+// Patient column for within-patient PERMANOVA permutations; with --cohort_preset tcga and no
+// column, the first 12 characters of the sample ID are used.
+params.batch_corr_patient_column = null
+// Add log10 total count per sample as a ConQuR covariate. Off by default:
+// the cohort report shows depth by batch so the user can decide.
+params.batch_corr_depth_covariate = false
+// Metadata column with two values (for example a clinical group) whose per-taxon effect sizes before and
+// after correction are reported next to the sample-type comparison. Null: sample type only.
+params.batch_corr_effect_column = null
 
 // ============================================================================
 // BATCH CORRECTION PARAMETERS
@@ -303,7 +321,7 @@ include { humann3; merge_humann3 } from './Modules/humann3.nf'
 // Preprocessing modules (optional)
 include { Decontamination; aggregateDecontaminatedSpecies } from './Modules/decontamination.nf'
 include { validationSpeciesList; buildValidationRef; alignForValidation; applyValidationMask; compareDecontamLevels } from './Modules/alignment_validation.nf'
-include { BatchCorrection } from './Modules/batch_correction.nf'
+include { BatchCorrection; PrepareBatchInput } from './Modules/batch_correction.nf'
 
 // ============================================================================
 // PARAMETER VALIDATION HELPERS
@@ -407,6 +425,32 @@ def humannDbGuard(boolean skip) {
 // MAIN WORKFLOW
 // ============================================================================
 
+// Batch-correction flags and the type column they need. Kept out
+// of the workflow block, which Nextflow 24.10 limits to 65,535 characters (tests/test_repo_hygiene.py).
+def checkBatchFlags(p) {
+    boolParam('tumor_only', p.tumor_only)
+    boolParam('downstream_include_controls', p.downstream_include_controls)
+    boolParam('batch_corr_protect_sample_type', p.batch_corr_protect_sample_type)
+    boolParam('batch_corr_depth_covariate', p.batch_corr_depth_covariate)
+}
+def batchNeedsTypeColumn(p) {
+    p.tumor_only.toString() == 'true' || (p.control_values && p.downstream_include_controls.toString() != 'true')
+}
+
+// Batch correction and its report evidence. Kept out of the entry workflow, which Nextflow 24.10
+// limits to 65,535 characters (tests/test_repo_hygiene.py).
+workflow BATCH_CORRECTION {
+    take:
+    input
+    main:
+    PrepareBatchInput(input, depsOf(["${params.scripts}/prepare_batch_input.py", "${params.scripts}/count_tables.py"]))
+    BatchCorrection(PrepareBatchInput.out.ready, depsOf([params.batch_corr_script, "${params.scripts}/batch_contract.R", "${params.scripts}/batch_reporting.R", "${params.scripts}/install_conqur.R"]))
+    emit:
+    skipped = PrepareBatchInput.out.skipped
+    qc_status = BatchCorrection.out.qc_status
+    evidence = BatchCorrection.out.report_evidence.collect().ifEmpty([])
+}
+
 workflow {
     // Resolved once: see BOOLEAN PARAMETER NORMALISATION above.
     def skipHostDepletion  = boolParam('skip_host_depletion', params.skip_host_depletion)
@@ -421,7 +465,7 @@ workflow {
     boolParam('decontam_allow_unknown_library', params.decontam_allow_unknown_library)
     boolParam('batch_corr_allow_uncorrected', params.batch_corr_allow_uncorrected)
     boolParam('save_intermediates', params.save_intermediates)
-    boolParam('tumor_only', params.tumor_only)
+    checkBatchFlags(params)
     boolParam('validation_export_reads', params.validation_export_reads)
     boolParam('validation_group_rescue_shared', params.validation_group_rescue_shared)
 
@@ -675,7 +719,7 @@ workflow {
         def header = metaFile.withReader { it.readLine() } ?: ''
         def cols = metadataColumns(header)
         def needed = [params.sample_id_column, params.batch_column] + covariates
-        if (params.tumor_only.toString() == 'true') needed << params.type_column
+        if (batchNeedsTypeColumn(params)) needed << params.type_column
         def missing = needed.findAll { it && !(it in cols) }.unique()
         if (missing) {
             error "Batch correction needs metadata column(s) that --metadata_file lacks: ${missing.join(', ')} " +
@@ -1336,8 +1380,10 @@ workflow {
                   "--decontam_otu_table and --metadata_file (audit C20)"
         }
 
-        BatchCorrection(ch_batch_input, depsOf([params.batch_corr_script, "${params.scripts}/batch_contract.R", "${params.scripts}/batch_reporting.R", "${params.scripts}/install_conqur.R"]))
-        qcParts << BatchCorrection.out.qc_status   // <rank>.batch_sample_status.tsv, per corrected rank
+        BATCH_CORRECTION(ch_batch_input)
+        qcParts << BATCH_CORRECTION.out.skipped
+        qcParts << BATCH_CORRECTION.out.qc_status   // <rank>.batch_sample_status.tsv, per corrected rank
+        BATCH_CORRECTION.out.evidence.set { BATCH_REPORT_EVIDENCE }
     }
 
     // ============================================================================

@@ -370,6 +370,16 @@ class CondaEnvTests(unittest.TestCase):
             self.assertTrue(entry["conqur_sha_matches_param"])
             self.assertIn("r-vegan=2.6_4=r43h0_0", entry["packages"])
 
+    def test_local_conqur_patch_is_recorded_and_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = make_prefix(Path(tmp))
+            desc = prefix / "lib/R/library/ConQuR/DESCRIPTION"
+            desc.write_text(desc.read_text() + "CMPipelinePatch: adonis2-terms-v1\n")
+            entry = FP.env_record(str(prefix), conqur_sha="ff233085")
+            self.assertEqual(entry["r_packages"]["ConQuR"]["CMPipelinePatch"], "adonis2-terms-v1")
+            self.assertIn("ConQuR=2.0@ff233085+adonis2-terms-v1",
+                          FP.software_summary({"batch_corr_env": entry})["batch_corr_env"])
+
     def test_conqur_mismatch_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = make_prefix(Path(tmp), conqur_sha="0000000")

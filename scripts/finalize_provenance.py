@@ -120,7 +120,7 @@ INTERESTING = {
 # solve, so conda-meta cannot see them (audit C06/D03/D08).
 R_PACKAGES_OF_RECORD = ("ConQuR", "cqrReg")
 DESCRIPTION_FIELDS = ("Package", "Version", "RemoteType", "RemoteRepo", "RemoteUsername",
-                      "RemoteRef", "RemoteSha", "Packaged")
+                      "RemoteRef", "RemoteSha", "Packaged", "CMPipelinePatch")
 
 PACKAGE_FILE = re.compile(r"^(?P<name>.+)-(?P<version>[^-]+)-(?P<build>[^-]+)\.(?:conda|tar\.bz2)$")
 
@@ -274,10 +274,14 @@ def software_summary(envs: dict[str, dict]) -> dict[str, list[str]]:
             pkg, _, rest = package.partition("=")
             if pkg in INTERESTING:
                 picked.append(f"{pkg}={rest.split('=')[0]}")
+                if pkg == "r-conqur" and "=" in rest:
+                    picked.append(f"r-conqur-build={rest.split('=', 1)[1]}")
         for pkg, desc in (entry.get("r_packages") or {}).items():
             if isinstance(desc, dict):
                 sha = desc.get("RemoteSha", "")
-                picked.append(f"{pkg}={desc.get('Version', '?')}" + (f"@{sha[:8]}" if sha else ""))
+                patch = desc.get("CMPipelinePatch", "")
+                picked.append(f"{pkg}={desc.get('Version', '?')}" + (f"@{sha[:8]}" if sha else "")
+                              + (f"+{patch}" if patch else ""))
         if picked:
             summary[name] = sorted(set(picked))
     return summary

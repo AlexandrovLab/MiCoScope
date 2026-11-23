@@ -59,11 +59,41 @@ load_and_prepare_data <- function(otu_path, meta_path) {
   list(otu = as.data.frame(mat, check.names = FALSE), meta = meta, unused_metadata = extra)
 }
 
+# Near-complete confounding between batch and a protected covariate. Complete
+# confounding already stops the run (a covariate constant within a batch). This records, without stopping,
+# covariates whose association with batch reaches `threshold`: Cramer's V for categorical covariates, and for
+# numeric ones the share of their variance explained by batch (eta squared). The threshold is provisional.
+confounding_note <- function(meta, batch_col, covars, threshold = 0.8) {
+  b <- factor(meta[[batch_col]]); hits <- character()
+  for (v in covars) {
+    x <- meta[[v]]
+    if (is.numeric(x)) {
+      ss <- sum((x - mean(x))^2)
+      if (!is.finite(ss) || ss == 0) next
+      val <- sum(tapply(x, b, function(z) length(z) * (mean(z) - mean(x))^2)) / ss; kind <- "eta squared"
+    } else {
+      tab <- table(b, droplevels(factor(x)))
+      if (min(dim(tab)) < 2L) next
+      chi <- suppressWarnings(stats::chisq.test(tab, correct = FALSE)$statistic)
+      val <- sqrt(as.numeric(chi) / (sum(tab) * (min(dim(tab)) - 1))); kind <- "Cramer's V"
+    }
+    if (is.finite(val) && val >= threshold) hits <- c(hits, sprintf("%s (%s %.2f)", v, kind, val))
+  }
+  if (length(hits)) paste0("batch nearly overlaps with ", paste(hits, collapse = ", "),
+                           "; batch and these effects may not be separable") else NA_character_
+}
+
 prepare_batch_cohort <- function(data, args, covars) {
   tab <- data$otu; meta <- data$meta
   if (anyDuplicated(covars) || args$batch_column %in% covars || any(!nzchar(covars)))
     stop("Covariates must be unique, nonempty and distinct from the batch column")
-  needed <- c(args$batch_column, covars, if (args$tumor_only) args$type_column)
+  # Decontamination controls are QC material, not study observations:
+  # they leave the analysis cohort by default and stay only when the run declares --include_controls.
+  control_values <- if (is.null(args$control_values)) character() else
+    trimws(strsplit(args$control_values, ",", fixed = TRUE)[[1]])
+  control_values <- control_values[nzchar(control_values) & toupper(control_values) != "NULL"]
+  drop_controls <- length(control_values) > 0L && !isTRUE(args$include_controls)
+  needed <- c(args$batch_column, covars, if (args$tumor_only || drop_controls) args$type_column)
   missing <- setdiff(needed, names(meta))
   if (length(missing)) stop("Missing required columns: ", paste(missing, collapse = ", "))
   ledger <- data.frame(sample = rownames(tab), status = "included", reason = "eligible",
@@ -74,6 +104,10 @@ prepare_batch_cohort <- function(data, args, covars) {
   }
   missing_value <- function(x) is.na(x) | trimws(x) %in% c("", "NA")
   exclude(rowSums(tab) == 0, "all-zero after decontamination")
+  if (drop_controls) {
+    types <- trimws(meta[[args$type_column]])
+    exclude(toupper(types) %in% toupper(control_values), "decontamination control (pass --include_controls to analyse)")
+  }
   if (args$tumor_only) {
     types <- meta[[args$type_column]]
     exclude(missing_value(types), "missing sample type")
@@ -114,6 +148,43 @@ prepare_batch_cohort <- function(data, args, covars) {
              "; change the model explicitly rather than silently dropping the covariate")
     }
   }
+  # Mixed sample types without sample type among the covariates. Following a synthetic check in which an
+  # unprotected sample type lost much of a known tissue difference, sample type is added as a protected
+  # covariate when every batch holds at least two types; otherwise, or when the run turns protection off,
+  # the run continues as configured. Every case is recorded for the report; the run never stops here.
+  sample_type_note <- NA_character_
+  if (!is.null(args$type_column) && args$type_column %in% names(meta)) {
+    types_now <- trimws(as.character(meta[[args$type_column]]))
+    kept_types <- sort(unique(types_now))
+    if (length(kept_types) > 1L && !(args$type_column %in% covars)) {
+      mixed <- paste0("sample types mixed (", paste(kept_types, collapse = ", "), ")")
+      per_batch <- tapply(types_now, as.character(meta[[args$batch_column]]), function(x) length(unique(x)))
+      single <- names(per_batch)[per_batch < 2L]
+      # A covariate that already splits the samples exactly as sample type does protects it already; adding a
+      # copy makes two identical model terms and weakened the correction in a synthetic check (2026-11-18).
+      same_as_type <- Filter(function(v) {
+        x <- trimws(as.character(meta[[v]]))
+        length(unique(x)) == length(kept_types) && length(unique(paste(x, types_now))) == length(kept_types)
+      }, covars)
+      if (length(same_as_type)) {
+        sample_type_note <- paste0(mixed, "; sample type already protected by covariate ", same_as_type[1])
+      } else if (isTRUE(args$no_protect_sample_type)) {
+        sample_type_note <- paste0(mixed, "; sample type is not a protected covariate (protection turned off)")
+      } else if (length(single)) {
+        sample_type_note <- paste0(mixed, "; sample type is not a protected covariate (batch ",
+                                   paste(single, collapse = ", "), " holds one sample type)")
+      } else {
+        # A syntactic copy: the TCGA type column is 'Sample Type_x', which a model formula cannot take.
+        meta$sample_type_protected <- factor(types_now)
+        covars <- c(covars, "sample_type_protected")
+        sample_type_note <- paste0(mixed, "; sample type added as a protected covariate (sample_type_protected)")
+      }
+      ledger$reason[ledger$status == "included"] <- sample_type_note
+      write.table(ledger, file.path(dirname(args$prefix), "batch_correction_sample_status.tsv"),
+                  sep = "\t", quote = FALSE, row.names = FALSE)
+      message("NOTE: ", sample_type_note)
+    }
+  }
   zero_taxa <- colSums(tab) == 0
   tab <- tab[, !zero_taxa, drop = FALSE]
   matrix_ok(tab, counts = TRUE, integer_counts = TRUE)
@@ -122,7 +193,23 @@ prepare_batch_cohort <- function(data, args, covars) {
               file.path(dirname(args$prefix), "batch_correction_taxon_status.tsv"),
               sep = "\t", quote = FALSE, row.names = FALSE)
   assign("dropped_empty_samples", ledger$sample[ledger$reason == "all-zero after decontamination"], envir = globalenv())
-  list(otu = tab, meta = meta)
+  # Sequencing depth by batch: always recorded so users can judge whether
+  # depth differs between batches. With --depth_covariate, log10 total count joins the covariates. In a
+  # synthetic check it kept more of a known tissue difference but left more batch effect when depth tracked
+  # batch. Added before the overlap check so that check sees it.
+  depth <- rowSums(tab)
+  med <- tapply(depth, as.character(meta[[args$batch_column]]), stats::median)
+  depth_summary <- paste0(paste(sprintf("%s %s", names(med), format(round(med), big.mark = ",", trim = TRUE)), collapse = "; "),
+                          sprintf("; highest/lowest median %.2fx", max(med) / min(med)))
+  if (isTRUE(args$depth_covariate)) {
+    if ("log_depth" %in% names(meta)) stop("Metadata already has a column named log_depth; rename it or drop --depth_covariate")
+    meta$log_depth <- log10(depth)
+    covars <- c(covars, "log_depth")
+  }
+  conf <- confounding_note(meta, args$batch_column, covars)
+  if (!is.na(conf)) message("NOTE: ", conf)
+  list(otu = tab, meta = meta, sample_type_note = sample_type_note, covariates = covars, confounding_note = conf,
+       depth_summary = depth_summary)
 }
 
 assert_same_matrix_ids <- function(x, reference) {
@@ -151,7 +238,7 @@ reject_existing_batch_outputs <- function(root) {
     stop("Existing batch outputs: use a fresh output directory; filename-only reuse is not allowed")
 }
 
-# K04 (audit 2026-09-30): Tune_ConQuR scores the uncorrected ("original") table of each prevalence
+# Single-batch guard (2026-09-30): Tune_ConQuR scores the uncorrected ("original") table of each prevalence
 # bin with adonis2(tab ~ batchid) without the single-batch guard it applies to the corrected
 # candidates. A bin whose nonzero samples all sit in one batch then stops the whole rank with
 # "contrasts can be applied only to factors with 2 or more levels" (CRC50 Test 3 genus, 2026-10-06).
@@ -180,7 +267,7 @@ guarded_tune_conqur <- function(f = ConQuR::Tune_ConQuR) {
   }
   b <- walk(body(f))
   if (!all(hits == 1L))
-    stop("Cannot apply the K04 Tune_ConQuR guard: expected each edit once, matched ",
+    stop("Cannot apply the single-batch Tune_ConQuR guard: expected each edit once, matched ",
          paste(hits, collapse = "/"), "; check the installed ConQuR against params.conqur_sha")
   body(f) <- b
   f

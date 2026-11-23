@@ -12,14 +12,14 @@
 #                            (it fixes a "batchid not found" error in ConQuR's foreach workers)
 #
 # Everything else ConQuR imports comes from conda, so both installs use dependencies = FALSE:
-# nothing is fetched from CRAN at whatever version it serves today (audit D03, 2026-09-23).
+# nothing is fetched from CRAN at whatever version it serves today (2026-09-23).
 # The earlier default, wdl2459/ConQuR@master, named a branch that does not exist upstream.
 
 repo  <- Sys.getenv("CONQUR_REPO", unset = "ivartb/ConQuR_par")
 ref   <- Sys.getenv("CONQUR_REF",  unset = "ff233085cedc36a24382038067a4cece3e94e0a0")
 force <- nzchar(Sys.getenv("CONQUR_FORCE"))
 cqr_version <- "1.2.1"
-# Offline source tarballs (audit D03): used first when present, checksum-verified against SHA256SUMS,
+# Offline source tarballs: used first when present, checksum-verified against SHA256SUMS,
 # so the env can be rebuilt without CRAN or GitHub (cqrReg 1.2.1 leaves CRAN's main index as soon as
 # a newer version appears). Falls back to the network when the directory is absent.
 offline <- Sys.getenv("CONQUR_OFFLINE_DIR",
