@@ -314,7 +314,17 @@ class RecordScript(unittest.TestCase):
 
 PROCESS_RE = re.compile(r"^process\s+(\w+)\s*\{", re.M)
 RECORD_RE = re.compile(r"ToolVersions\.record\(task, params, '([^']+)'\)")
-CONDA_RE = re.compile(r'^\s*conda\s+"\$\{params\.(\w+)\}"', re.M)
+CONDA_RE = re.compile(r'^\s*conda\s+"\$\{(?:params\.(\w+)|(Mpa)\.env\(params\))\}"', re.M)
+# A process whose env is "${Mpa.env(params)}" runs in either MetaPhlAn lockfile (4.1.1 for
+# vJun23-era databases, 4.2.6 for newer; lib/Mpa.groovy), so its tools must be pinned in both.
+MPA_ENVS = ("metaphlan41_env", "metaphlan42_env")
+
+
+def conda_env_params(body):
+    m = CONDA_RE.search(body)
+    if m is None:
+        return None
+    return list(MPA_ENVS) if m.group(2) else [m.group(1)]
 PARAM_ENV_RE = re.compile(r"params\.(\w+_env)\s*=\s*\"\$\{projectDir\}/([^\"]+)\"")
 
 
@@ -364,14 +374,14 @@ class Wiring(unittest.TestCase):
             if not records:
                 continue
             self.assertEqual(len(records), 1, f"{name}: one record line per process")
-            env_param = CONDA_RE.search(body).group(1)
-            pins = FP.env_pins(str(envs[env_param]))
-            self.assertTrue(pins, f"{name}: no pins parsed from {envs[env_param]}")
-            for entry in records[0].split():
-                tool, _, package = entry.partition(":")
-                package = package or tool
-                if package not in pins:
-                    problems.append(f"{name}: {tool} ({package}) not in {envs[env_param].name}")
+            for env_param in conda_env_params(body):
+                pins = FP.env_pins(str(envs[env_param]))
+                self.assertTrue(pins, f"{name}: no pins parsed from {envs[env_param]}")
+                for entry in records[0].split():
+                    tool, _, package = entry.partition(":")
+                    package = package or tool
+                    if package not in pins:
+                        problems.append(f"{name}: {tool} ({package}) not in {envs[env_param].name}")
         self.assertEqual(problems, [])
 
     def test_python_tools_name_their_package(self):

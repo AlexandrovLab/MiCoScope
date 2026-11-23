@@ -127,8 +127,9 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--t2t_phix_db` | `null` | Second host-depletion index, T2T-CHM13v2.0. Despite the name it contains **no phiX** ([host_depletion_references.md](host_depletion_references.md)); the name is kept for compatibility. Set in a site profile or with --t2t_phix_db |
 | `--pangenome_db` | `null` | optional .mmi file or directory containing .mmi files |
 | `--kraken_db` | `null` | Set in a site profile or with --kraken_db |
-| `--metaphlan_db` | `null` | Set in a site profile or with --metaphlan_db |
-| `--metaphlan_index` | `mpa_vJun23_CHOCOPhlAnSGB_202307` | Bowtie2 index name inside --metaphlan_db |
+| `--metaphlan_db` | `null` | the default MetaPhlAn database directory; set in a site profile (TSCC: vJan26) or with --metaphlan_db |
+| `--metaphlan_db_vjun23` | `null` | a vJun23-era MetaPhlAn database. With `--skip_humann3 false` and `--metaphlan_index auto`, MetaPhlAn switches to it (with MetaPhlAn 4.1.1), because HUMAnN 3.9 reads only vJun23-era profiles. Required only for that combination; the launch stops with a named error if it is missing |
+| `--metaphlan_index` | `auto` | `auto`: the single `mpa_*.pkl` in the database directory in use (so an older database passed as --metaphlan_db keeps working unchanged). An explicit index name is used as given; with HUMAnN requested and an index HUMAnN 3.9 cannot read, HUMAnN is skipped with a launch warning |
 | `--humann3_nucleotide_db` | `null` | Set in a site profile or with --humann3_nucleotide_db |
 | `--humann3_protein_db` | `null` | Set in a site profile or with --humann3_protein_db |
 | `--adapters` | `ref/known_adapters.fna` | the 234-sequence adapter FASTA, used only with `--adapter_trim always` |
@@ -147,8 +148,9 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--multiqc_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--krakenuniq_bracken_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--consensus_taxa_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
-| `--metaphlan4_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
-| `--metaphlan42_env` | `conda_envs/metaphlan42_env.yml` | CANDIDATE MetaPhlAn 4.2.6 env for the vJan26 upgrade comparison; no process uses it until the comparison passes |
+| `--metaphlan4_env` | `auto` | `auto`: `--metaphlan41_env` for vJun23-era indexes, `--metaphlan42_env` for newer ones (vJan26 needs MetaPhlAn 4.2). An explicit path is used as given |
+| `--metaphlan41_env` | `conda_envs/lock/metaphlan4_env.linux-64.txt` | MetaPhlAn 4.1.1 (vJun23-era databases) |
+| `--metaphlan42_env` | `conda_envs/lock/metaphlan42_env.linux-64.txt` | MetaPhlAn 4.2.6 (vJan26 and newer); the binary prints 4.2.5 (scripts/tool_version_aliases.tsv). Peak memory 41.6 GB on vJan26 |
 | `--humann3_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--decontam_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--validation_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |

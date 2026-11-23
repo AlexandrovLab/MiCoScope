@@ -38,9 +38,18 @@ class HumannDbGuard(unittest.TestCase):
         )
 
     def test_vjun23_and_v3_families_pass_through(self):
-        body = guard_body()
-        self.assertIn("vJun23", body)
-        self.assertIn("mpa_v3", body)
+        # Compatibility is defined once, in lib/Mpa.groovy, and the guard uses it.
+        self.assertIn("Mpa.humannCompatible(", guard_body())
+        mpa = (ROOT / "lib" / "Mpa.groovy").read_text()
+        rule = re.search(r"static boolean humannCompatible\(String index\) \{(.*?)\n    \}", mpa, re.S)
+        self.assertIsNotNone(rule, "Mpa.humannCompatible not found")
+        self.assertIn("vJun23", rule.group(1))
+        self.assertIn("mpa_v3", rule.group(1))
+
+    def test_guard_reads_the_resolved_index(self):
+        # With --metaphlan_index auto the guard must see the index Mpa resolved (vJun23 after the
+        # HUMAnN switch), not the literal 'auto', or every HUMAnN run would be skipped.
+        self.assertIn("Mpa.index(params)", guard_body())
 
     def test_incompatible_index_warns_and_skips_never_errors(self):
         body = guard_body()

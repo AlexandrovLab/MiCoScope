@@ -4,7 +4,7 @@ process process_metaphlan {
 
     label 'process_high'
     scratch true
-    conda "${params.metaphlan4_env}"
+    conda "${Mpa.env(params)}"
     publishDir "${params.metaphlan4_dir}", mode: 'copy'
 
     input:

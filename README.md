@@ -53,7 +53,8 @@ cd CMPipeline
 | T2T-CHM13 minimap2 index (no phiX despite the name; see docs/host_depletion_references.md) | `--t2t_phix_db` | host depletion |
 | HPRC pangenome `.mmi` (one file or a directory) | `--pangenome_db` | optional extra host depletion |
 | KrakenUniq/Bracken database | `--kraken_db` | classification; must contain `database<N>mers.kmer_distrib` files (one per read length; `--bracken_read_length auto` picks per sample) |
-| MetaPhlAn 4 database (vJun23) | `--metaphlan_db` | classification |
+| MetaPhlAn 4 database (vJan26 by default) | `--metaphlan_db` | classification |
+| MetaPhlAn 4 database (vJun23) | `--metaphlan_db_vjun23` | HUMAnN 3 only: HUMAnN 3.9 reads only vJun23-era profiles, so `--skip_humann3 false` switches MetaPhlAn to this database |
 | ChocoPhlAn v201901_v31 + UniRef90 | `--humann3_nucleotide_db`, `--humann3_protein_db` | HUMAnN 3 only |
 
 ### 4. Batch-correction environment

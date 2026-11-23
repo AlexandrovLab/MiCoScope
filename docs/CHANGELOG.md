@@ -4,6 +4,17 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **MetaPhlAn now defaults to the vJan26 database with MetaPhlAn 4.2.6; HUMAnN runs switch to
+  vJun23 (review #15). MetaPhlAn profiles change.** On the 10-sample comparison the newer database
+  gave the same gate decisions, near-identical richness (median 32.5 vs 33 species) and the same
+  consensus overlap with Bracken, at 41.6 GB peak memory (19.1 GB before). HUMAnN 3.9 refuses
+  vJan26 profiles, so `--skip_humann3 false` moves MetaPhlAn to `--metaphlan_db_vjun23` and
+  MetaPhlAn 4.1.1 automatically (logged at launch). `--metaphlan_index` and `--metaphlan4_env`
+  default to `auto`: the index is the single `mpa_*.pkl` in the database directory, and the
+  environment follows the database generation, so a run given an older database keeps its
+  old behaviour. Explicit values win. New: `--metaphlan_db_vjun23`, `--metaphlan41_env`;
+  `conf/databases.tsv` freezes both databases. Resolution lives in `lib/Mpa.groovy`.
+
 - **`--fastp_extra` (default empty, a no-op).** Passes extra fastp flags through for the review #13
   poly-G / low-complexity experiment arms; nothing becomes a default without the comparison.
 
@@ -12,7 +23,8 @@ Not yet released; these are the changes since the last tagged state of `main`.
   (verified: it refuses a vJan26 profile by an explicit version check). Requesting
   `--skip_humann3 false` with a newer `--metaphlan_index` now warns and skips functional
   profiling instead of failing at the HUMAnN stage; the warning names the vJun23 database as
-  the way to get functional profiles. Default behaviour (vJun23 index) is unchanged.
+  the way to get functional profiles. With the default `--metaphlan_index auto` this guard does
+  not fire: the run switches to vJun23 instead (entry above).
 
 - **Validation reports support-to-estimate ratios (review #3/#16/#17).** `validation_stats.all.tsv` gains
   `support_to_bracken_ratio` and `unique_to_bracken_ratio` (supporting / unique reads over the row's

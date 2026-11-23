@@ -220,8 +220,11 @@ params.t2t_phix_db=null    // Set in a site profile or with --t2t_phix_db
 params.pangenome_db=null  // optional .mmi file or directory containing .mmi files
 params.host_depletion_frag = 'no'   // no (default, 2026-10-06) | auto: minimap2 -ax sr pairs ADJACENT mates (fragment mode); 'no' makes depletion independent of input route/record order (Ludmil E0, decision 37)
 params.kraken_db=null     // Set in a site profile or with --kraken_db
-params.metaphlan_db=null  // Set in a site profile or with --metaphlan_db
-params.metaphlan_index="mpa_vJun23_CHOCOPhlAnSGB_202307"  // Bowtie2 index name inside --metaphlan_db
+// MetaPhlAn database: the newest the site configures (vJan26 on TSCC) is the default. HUMAnN 3.9
+// reads only vJun23-era profiles, so --skip_humann3 false switches to --metaphlan_db_vjun23 (lib/Mpa.groovy).
+params.metaphlan_db=null         // Set in a site profile or with --metaphlan_db
+params.metaphlan_db_vjun23=null  // vJun23-era database used when HUMAnN is requested; site profile or flag
+params.metaphlan_index="auto"    // auto: the single mpa_*.pkl in the database directory; or an explicit index name
 params.humann3_nucleotide_db=null  // Set in a site profile or with --humann3_nucleotide_db
 params.humann3_protein_db=null     // Set in a site profile or with --humann3_protein_db
 params.adapters="${projectDir}/ref/known_adapters.fna"
@@ -246,11 +249,11 @@ params.minimap2_env = "${projectDir}/conda_envs/lock/minimap2_env.linux-64.txt"
 params.multiqc_env = "${projectDir}/conda_envs/lock/multiqc_env.linux-64.txt"
 params.krakenuniq_bracken_env = "${projectDir}/conda_envs/lock/krakenUniq_bracken_env.linux-64.txt"
 params.consensus_taxa_env = "${projectDir}/conda_envs/lock/consensus_taxa_env.linux-64.txt"
-params.metaphlan4_env = "${projectDir}/conda_envs/lock/metaphlan4_env.linux-64.txt"
-// CANDIDATE (16 Nov 2026), not used by any process: MetaPhlAn 4.2.6 for the vJan26 database. The
-// upgrade comparison passes it explicitly (--metaphlan4_env "${projectDir}/conda_envs/metaphlan42_env.yml"
-// or its lockfile once built); it replaces metaphlan4_env only if the comparison passes.
-params.metaphlan42_env = "${projectDir}/conda_envs/metaphlan42_env.yml"
+// auto: MetaPhlAn 4.1.1 for vJun23-era indexes, 4.2.6 for newer (vJan26 needs 4.2). An explicit
+// --metaphlan4_env is used as given. Adopted 23 Nov 2026 after the 10-sample comparison (review #15).
+params.metaphlan4_env = "auto"
+params.metaphlan41_env = "${projectDir}/conda_envs/lock/metaphlan4_env.linux-64.txt"
+params.metaphlan42_env = "${projectDir}/conda_envs/lock/metaphlan42_env.linux-64.txt"
 params.humann3_env = "${projectDir}/conda_envs/lock/humann3_env.linux-64.txt"
 params.decontam_env = "${projectDir}/conda_envs/lock/decontam_env.linux-64.txt"
 params.validation_env = "${projectDir}/conda_envs/lock/validation_env.linux-64.txt"
@@ -382,9 +385,11 @@ def boolParam(String name, value) {
 // with a vJan26 profile, 23 Nov 2026, review #15). When functional profiling is requested
 // together with a newer --metaphlan_index, warn at launch and SKIP HUMAnN instead of failing
 // hours in: the user chooses between the newer taxonomy and functional profiles.
+// With --metaphlan_index auto, lib/Mpa.groovy has already switched to the vJun23 database, so
+// this fires only for an EXPLICIT incompatible index (or a database directory that can't be read).
 def humannDbGuard(boolean skip) {
-    def idx = params.metaphlan_index.toString()
-    if (!skip && !(idx.contains('vJun23') || idx.startsWith('mpa_v3'))) {
+    def idx = (Mpa.index(params) ?: params.metaphlan_index).toString()
+    if (!skip && !Mpa.humannCompatible(idx)) {
         log.warn "HUMAnN3 SKIPPED: HUMAnN 3.9 only accepts MetaPhlAn profiles from the v3/vJun23 " +
                  "databases, and --metaphlan_index is '${idx}'. For functional profiles, run with " +
                  "the vJun23 database (e.g. --metaphlan_index mpa_vJun23_CHOCOPhlAnSGB_202307)."
@@ -532,10 +537,9 @@ workflow {
                 error "--kraken_db ${krakenDir} has no database${params.bracken_read_length}mers.kmer_distrib (Bracken needs one built for --bracken_read_length ${params.bracken_read_length})"
             }
         }
-        def mpaDir = file(params.metaphlan_db)
-        if (mpaDir.isDirectory() && !file("${mpaDir}/${params.metaphlan_index}.pkl").exists()) {
-            error "--metaphlan_db ${mpaDir} has no ${params.metaphlan_index}.pkl (check --metaphlan_index)"
-        }
+        def mpaErr = Mpa.check(params)
+        if (mpaErr) error mpaErr
+        log.info Mpa.describe(params)
         if (!skipHumann3) {
             requirePathParam('humann3_nucleotide_db', params.humann3_nucleotide_db, 'for HUMAnN3 functional profiling')
             requirePathParam('humann3_protein_db', params.humann3_protein_db, 'for HUMAnN3 functional profiling')
@@ -748,7 +752,7 @@ workflow {
                 t2t_phix_db          : Provenance.data(params.t2t_phix_db),
                 pangenome_db         : Provenance.data(params.pangenome_db),
                 kraken_db            : Provenance.data(params.kraken_db),
-                metaphlan_db         : Provenance.data(params.metaphlan_db),
+                metaphlan_db         : Provenance.data(Mpa.dbDir(params)),
                 humann3_nucleotide_db: Provenance.data(params.humann3_nucleotide_db),
                 humann3_protein_db   : Provenance.data(params.humann3_protein_db),
                 cram_reference       : Provenance.data(params.cram_reference),
@@ -1035,7 +1039,7 @@ workflow {
             // Only samples that cleared --consensus_min_reads emit this channel at all,
             // so no filtering is needed: absence is the gate.
             Bracken.out.metaphlan_reads.set { METAPHLAN_INPUT }
-            metaphlan4(METAPHLAN_INPUT, depsOf([], [params.metaphlan_db])).set { METAPHLAN_OUT }
+            metaphlan4(METAPHLAN_INPUT, depsOf([], [Mpa.dbDir(params)])).set { METAPHLAN_OUT }
 
             // Collect all MetaPhlAn profiles once all samples are done
             METAPHLAN_OUT.map { sampleID, bowtie2_file, sam_file, profiled_metagenome ->
@@ -1072,7 +1076,7 @@ workflow {
                         "--consensus_min_reads (${params.consensus_min_reads}); no functional profiles will be produced."
                 }
 
-                humann3(HUMANN3_INPUT, depsOf([], [params.humann3_nucleotide_db, params.humann3_protein_db, params.metaphlan_db])).set { HUMANN3_OUT }
+                humann3(HUMANN3_INPUT, depsOf([], [params.humann3_nucleotide_db, params.humann3_protein_db, Mpa.dbDir(params)])).set { HUMANN3_OUT }
 
                 // Collect per-sample outputs for merging
                 HUMANN3_OUT.multiMap { genefamilies, pathabundance, pathcoverage ->

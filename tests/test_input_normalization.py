@@ -141,11 +141,16 @@ class InputNormalizationTests(unittest.TestCase):
         self.assertNotIn('"${projectDir}/RESULTS/', text)
 
     def test_metaphlan_index_is_a_parameter(self):
-        self.assertIn('params.metaphlan_index=', (ROOT / "main.nf").read_text())
+        # The index is a parameter (default 'auto'), resolved in ONE place, lib/Mpa.groovy; the
+        # modules read the resolved value, never a hard-coded database name (review #15).
+        self.assertIn('params.metaphlan_index="auto"', (ROOT / "main.nf").read_text())
+        self.assertIn("params.metaphlan_index", (ROOT / "lib" / "Mpa.groovy").read_text())
         for name in ("metaphlan4.nf", "humann3.nf"):
             module = (ROOT / "Modules" / name).read_text()
             self.assertNotIn("mpa_vJun23", module, name)
-            self.assertIn("params.metaphlan_index", module, name)
+            self.assertNotIn("mpa_vJan26", module, name)
+            self.assertIn("Mpa.index(params)", module, name)
+            self.assertIn("Mpa.dbDir(params)", module, name)
 
     def test_config_has_no_top_level_function(self):
         """check_max() is a top-level function, which the Nextflow 25+ config parser

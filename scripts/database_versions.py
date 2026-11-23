@@ -72,6 +72,8 @@ PARAM_STAGE = {
     "hg38_db": "host_depletion", "t2t_phix_db": "host_depletion", "pangenome_db": "pangenome_depletion",
     "cram_reference": "host_depletion",
     "kraken_db": "classification", "metaphlan_db": "classification",
+    # read only when HUMAnN is requested: main.nf then switches MetaPhlAn to it (lib/Mpa.groovy)
+    "metaphlan_db_vjun23": "humann3",
     "humann3_nucleotide_db": "humann3", "humann3_protein_db": "humann3",
     "validation_ref": "alignment_validation", "validation_taxdb": "alignment_validation",
 }

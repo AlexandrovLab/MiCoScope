@@ -756,6 +756,7 @@ def _sibling(name: str):
 
 
 DATABASE_PARAMS = ("hg38_db", "t2t_phix_db", "pangenome_db", "cram_reference", "kraken_db", "metaphlan_db",
+                   "metaphlan_db_vjun23",
                    "humann3_nucleotide_db", "humann3_protein_db", "validation_ref", "validation_taxdb")
 
 

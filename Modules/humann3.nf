@@ -47,7 +47,7 @@ process humann3 {
         --search-mode uniref90 \\
         --nucleotide-database ${params.humann3_nucleotide_db} \\
         --protein-database ${params.humann3_protein_db} \\
-        --metaphlan-options "--bowtie2db ${params.metaphlan_db} -x ${params.metaphlan_index}" \\
+        --metaphlan-options "--bowtie2db ${Mpa.dbDir(params)} -x ${Mpa.index(params)}" \\
         --output . \\
         --output-basename ${SAMPLE_NAME} \\
         --threads ${task.cpus} \\

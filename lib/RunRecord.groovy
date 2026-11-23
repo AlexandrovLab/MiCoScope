@@ -132,7 +132,8 @@ class RunRecord {
         if (decontam) names << 'decontam_env'
         if (flags.run_batch_correction) names << 'batch_corr_env'
         if ((hostDepletion || classification || decontam)) names << 'consensus_taxa_env'   // qcSummary, cohortReport
-        return names.collectEntries { n -> [(n): params[n]?.toString()] }
+        // metaphlan4_env defaults to 'auto': record the lockfile this launch resolves to (lib/Mpa.groovy).
+        return names.collectEntries { n -> [(n): n == 'metaphlan4_env' ? Mpa.env(params) : params[n]?.toString()] }
     }
 
     /**

@@ -6,7 +6,7 @@ process metaphlan4 {
     scratch true
     // Intermediate read/alignment files are published only with --save_intermediates true (audit C11);
     publishDir "${params.metaphlan4_dir}", mode: 'copy', saveAs: { fn -> (params.save_intermediates.toString() == 'true' || !(fn =~ /\.(fastq|fq|fasta|fa|sam|bam|bowtie2\.bz2)(\.gz|\.bz2)?$/)) ? fn : null }
-    conda "${params.metaphlan4_env}"  // Set conda environment
+    conda "${Mpa.env(params)}"  // 4.1.1 or 4.2 by database (lib/Mpa.groovy)
 
     input:
     tuple val(sampleID), path(reads)
@@ -56,8 +56,8 @@ process metaphlan4 {
 
     # Run MetaPhlAn4
     metaphlan "${SAMPLE_NAME}.trimmed.fastq" \\
-        "\$DB_FLAG" "${params.metaphlan_db}" \\
-        --index ${params.metaphlan_index} \\
+        "\$DB_FLAG" "${Mpa.dbDir(params)}" \\
+        --index ${Mpa.index(params)} \\
         "\$MAP_FLAG" "${SAMPLE_NAME}.metagenome.bowtie2.bz2" \\
         -s "${SAMPLE_NAME}.sam.bz2" \\
         --nproc ${task.cpus} \\
