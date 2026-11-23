@@ -377,6 +377,22 @@ def boolParam(String name, value) {
 }
 
 
+// HUMAnN 3.9 accepts MetaPhlAn profiles only from the v3/vJun23-era databases and refuses
+// anything newer outright ("not generated with the database version v3 or vJun23"; probed
+// with a vJan26 profile, 23 Nov 2026, review #15). When functional profiling is requested
+// together with a newer --metaphlan_index, warn at launch and SKIP HUMAnN instead of failing
+// hours in: the user chooses between the newer taxonomy and functional profiles.
+def humannDbGuard(boolean skip) {
+    def idx = params.metaphlan_index.toString()
+    if (!skip && !(idx.contains('vJun23') || idx.startsWith('mpa_v3'))) {
+        log.warn "HUMAnN3 SKIPPED: HUMAnN 3.9 only accepts MetaPhlAn profiles from the v3/vJun23 " +
+                 "databases, and --metaphlan_index is '${idx}'. For functional profiles, run with " +
+                 "the vJun23 database (e.g. --metaphlan_index mpa_vJun23_CHOCOPhlAnSGB_202307)."
+        return true
+    }
+    return skip
+}
+
 // ============================================================================
 // MAIN WORKFLOW
 // ============================================================================
@@ -386,7 +402,7 @@ workflow {
     def skipHostDepletion  = boolParam('skip_host_depletion', params.skip_host_depletion)
     def skipClassification = boolParam('skip_classification', params.skip_classification)
     def skipConsensus      = boolParam('skip_consensus', params.skip_consensus)
-    def skipHumann3        = boolParam('skip_humann3', params.skip_humann3)
+    def skipHumann3        = humannDbGuard(boolParam('skip_humann3', params.skip_humann3))
     def runDecontam        = boolParam('run_decontam', params.run_decontam)
     def runBatchCorrection = boolParam('run_batch_correction', params.run_batch_correction)
     def skipMultiqc        = boolParam('skip_multiqc', params.skip_multiqc)

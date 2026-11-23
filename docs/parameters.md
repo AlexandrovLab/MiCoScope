@@ -11,7 +11,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--skip_host_depletion` | `false` | skip the GRCh38/T2T/pangenome depletion stage |
 | `--skip_classification` | `false` | skip KrakenUniq/Bracken and MetaPhlAn |
 | `--skip_consensus` | `false` | skip consensus (Bracken ∩ MetaPhlAn agreement); Bracken tables then go downstream |
-| `--skip_humann3` | `true` | HUMAnN 3 is off by default; `false` turns it on (needs both HUMAnN databases) |
+| `--skip_humann3` | `true` | HUMAnN 3 is off by default; `false` turns it on (needs both HUMAnN databases). HUMAnN 3.9 accepts MetaPhlAn profiles only from the v3/vJun23-era databases: with a newer `--metaphlan_index` the run warns at launch and skips HUMAnN — for functional profiles, use the vJun23 database |
 | `--run_decontam` | `true` | run decontamination (on by default; needs `--metadata_file` and the four role parameters) |
 | `--run_batch_correction` | `false` | run ConQuR batch correction (off by default; needs covariates and >= 20 samples) |
 | `--skip_multiqc` | `false` | skip the MultiQC report (fastp JSON + all FastQC passes) |

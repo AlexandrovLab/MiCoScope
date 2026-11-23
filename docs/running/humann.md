@@ -3,6 +3,13 @@
 HUMAnN3 is off by default (`--skip_humann3 true`). When enabled it needs
 `--humann3_nucleotide_db` and `--humann3_protein_db`, both checked before the run starts:
 
+**Database compatibility.** HUMAnN 3.9 accepts MetaPhlAn profiles only from the v3/vJun23-era
+databases; it refuses newer ones outright ("not generated with the database version v3 or
+vJun23" — verified against a vJan26 profile, Nov 2026). If `--skip_humann3 false` is combined
+with a newer `--metaphlan_index`, the run **warns at launch and skips HUMAnN** rather than
+failing hours in. The choice is the user's: the newer MetaPhlAn taxonomy, or functional
+profiles with `--metaphlan_index mpa_vJun23_CHOCOPhlAnSGB_202307`.
+
 ```bash
 nextflow run main.nf --skip_humann3 false \
   --humann3_nucleotide_db /db/chocophlan --humann3_protein_db /db/uniref
