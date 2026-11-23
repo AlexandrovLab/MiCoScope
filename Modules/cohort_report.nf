@@ -3,7 +3,7 @@ nextflow.enable.dsl=2
 /*
  * Cohort report: one self-contained HTML page for the run.
  *
- * Reads the QC summary table and the provenance record only -- it does not re-walk the
+ * Reads the QC summary and explicitly connected current-run evidence -- it does not re-walk the
  * results tree, so the report and the table cannot disagree. No network, no CDN, no
  * JavaScript libraries, so the page still opens years from now from a filesystem.
  */
@@ -20,6 +20,8 @@ process cohortReport {
     path(qc_summary)
     path(validation_report)     // [] unless alignment validation ran
     path(consensus_status)      // [] unless consensus ran (audit A09)
+    path(decontam_evidence)     // Explicit current-run bundles; [] when decontamination did not run
+    path(batch_evidence)        // One bundle per corrected rank; [] when batch correction did not run
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
@@ -29,8 +31,10 @@ process cohortReport {
     path("cmp_cohort_report.html"), emit: report
 
     script:
+    def decontam_arg = decontam_evidence ? decontam_evidence.collect { "--decontam-evidence \"${it}\"" }.join(" ") : ""
     def validation_arg = validation_report ? "--validation-report \"${validation_report}\"" : ""
     def consensus_arg = consensus_status ? "--consensus-status \"${consensus_status}\"" : ""
+    def batch_arg = batch_evidence ? batch_evidence.collect { "--batch-evidence \"${it}\"" }.join(" ") : ""
     // This launch's provenance record, by exact name (<sessionId>_<runName>.json under tracedir),
     // not "newest file in the directory" (audit C14). Outside the work dir, so passed as a path.
     def record = RunRecord.path(params.tracedir, "${workflow.sessionId}_${workflow.runName}")
@@ -40,6 +44,6 @@ process cohortReport {
     python3 "${params.scripts}/build_cohort_report.py" \\
         --qc-summary "${qc_summary}" \\
         --output cmp_cohort_report.html \\
-        --provenance "${record}" ${validation_arg} ${consensus_arg}
+        --provenance "${record}" ${validation_arg} ${consensus_arg} ${decontam_arg} ${batch_arg}
     """
 }

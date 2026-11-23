@@ -2,13 +2,13 @@
 """Cohort report: one self-contained HTML page summarising a CMPipeline run.
 
 Reads the QC summary table (scripts/build_qc_summary.py) and, when present, the run
-provenance record. It deliberately does not re-walk the results tree: the summary table
-is the single source, so the report and the table can never disagree.
+provenance record plus explicitly supplied current-run evidence bundles.
+It does not re-walk the results tree or select historical outputs.
 
 The page embeds everything -- no network, no CDN, no JavaScript libraries -- so it opens
 from a cluster filesystem or an email attachment years from now.
 
-Counts and rates only. No sequence and no clinical value is read or written. The page
+Counts, rates and declared sample-type labels. No sequence is read or written. The page
 DOES carry per-sample identifiers, so treat it as you would any sample-level table.
 
 Colour: the depletion stages are an ordinal ramp (ordered funnel stages), rendered as a
@@ -29,6 +29,12 @@ import html
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from decontam_report import render as render_decontam_evidence
+from decontam_report import load as load_decontam_evidence
+from batch_report import render as render_batch_evidence
 
 NA = {"", "NA", None}
 
@@ -359,7 +365,69 @@ def consensus_banner(path):
             f'unfiltered. Treat taxon calls accordingly.</p></section>')
 
 
-def render(rows, record, qc_path, validation_report=None, consensus_status=None) -> str:
+def sample_batches(decontam_evidence) -> dict:
+    """Batch per sample from the decontamination evidence (sample_validation.tsv has a batch column since
+    2026-11-19); empty when no bundle or an older bundle without it."""
+    out = {}
+    for path in decontam_evidence or []:
+        for r in load_decontam_evidence(path)[1]["sample_validation.tsv"]:
+            if r.get("batch") not in NA:
+                out[r["sample_id"]] = r["batch"]
+    return out
+
+
+def depth_by_type(rows, batches=None) -> str:
+    """Sequencing depth by sample type: decontam's prevalence test compares how often a
+    taxon is detected in positives and controls, and detection rises with depth, so a depth gap between the groups
+    is shown next to the decontamination tables. Library primary records for BAM/CRAM input, else reads into QC.
+    Read counts, not microbial counts. Empty unless decontamination ran."""
+    batches = batches or {}
+    by_batch = bool(batches)
+    groups = {}
+    for r in rows:
+        t = r.get("decontam_sample_type")
+        if t in NA:
+            continue
+        if by_batch:
+            t = (batches.get(r.get("sample"), "—"), t)
+        v = r.get("library_primary_records")
+        v = v if v not in NA else r.get("reads_raw")
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            continue
+        g = groups.setdefault(t, {"values": [], "roles": set()})
+        g["values"].append(v)
+        if r.get("decontam_role") not in NA:
+            g["roles"].add(r["decontam_role"])
+    if not groups:
+        return ""
+    def q(vals, f):
+        vals = sorted(vals); k = (len(vals) - 1) * f; lo = int(k); hi = min(lo + 1, len(vals) - 1)
+        return vals[lo] + (vals[hi] - vals[lo]) * (k - lo)
+    def ref_for(key):
+        same = [k for k in groups if (k[0] == key[0] if by_batch else True)]
+        controls = [v for k in same if "control" in groups[k]["roles"] for v in groups[k]["values"]]
+        return q(controls, 0.5) if controls else None
+    body = []
+    for t in sorted(groups):
+        vals = groups[t]["values"]; med = q(vals, 0.5); ref = ref_for(t)
+        ratio = f"{med / ref:.2f}×" if ref else "—"
+        label = f"{t[0]} · {t[1]}" if by_batch else t
+        body.append(f"<tr><td>{html.escape(label)}</td><td>{html.escape(', '.join(sorted(groups[t]['roles'])) or '—')}</td>"
+                    f"<td>{len(vals)}</td><td>{fmt_int(round(med))}</td><td>{fmt_int(round(q(vals, .25)))} – {fmt_int(round(q(vals, .75)))}</td>"
+                    f"<td>{fmt_int(round(min(vals)))} – {fmt_int(round(max(vals)))}</td><td>{ratio}</td></tr>")
+    head = "".join(f"<th>{h}</th>" for h in ["Batch · sample type" if by_batch else "Sample type", "Role", "Samples", "Median reads", "Middle half (IQR)", "Range", "Median vs controls"])
+    return ('<section><h2>Sequencing depth by sample type</h2><p class="lede">Reads per sample (library primary '
+            'records for BAM/CRAM input, otherwise reads into QC), not microbial counts. Decontamination compares how '
+            'often a taxon is detected in positives and in controls, and detection rises with depth, so a large depth '
+            'gap between the groups can make a taxon look more or less prevalent in one group for that reason alone. '
+            + ('Ratios compare with the controls of the same batch.' if by_batch else 'No batch per sample was available, so batches are pooled.') + '</p>'
+            f'<div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div></section>')
+
+
+def render(rows, record, qc_path, validation_report=None, consensus_status=None, decontam_evidence=None,
+           batch_evidence=None) -> str:
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     filtering = table(
@@ -410,10 +478,14 @@ def render(rows, record, qc_path, validation_report=None, consensus_status=None)
         [("sample", "Sample", html.escape),
          ("decontam_sample_type", "Sample type", lambda v: html.escape(str(v or "—"))),
          ("decontam_role", "Role", lambda v: html.escape(str(v or "—"))),
-         ("decontam_final_status", "Status", lambda v: html.escape(str(v or "—")))],
+         ("decontam_final_status", "Cohort status", lambda v: html.escape(str(v or "—"))),
+         ("decontam_result_status", "Result", lambda v: html.escape(str(v or "—"))),
+         ("decontam_result_reason", "Result reason", lambda v: html.escape(str(v or "—"))),
+         ("genus_rollup_status", "Genus roll-up", lambda v: html.escape(str(v or "—")))],
         "Decontamination roles",
         "Which samples were treated as positives and which as negative controls. "
-        "Empty unless decontamination ran.",
+        "A valid_empty result means no taxa survived the declared processing, not a biological negative. "
+        "Genus not_applicable means retained species could not be assigned a genus. Empty unless decontamination ran.",
         empty_when="decontam_role",
     )
 
@@ -425,7 +497,10 @@ def render(rows, record, qc_path, validation_report=None, consensus_status=None)
          ("batch_genus_status", "Genus", lambda v: html.escape(str(v or "—")))],
         "Batch correction cohort",
         "Whether each sample entered batch correction at each rank, and why not. "
-        "Empty unless batch correction ran.",
+        "Decontamination controls are excluded by default. An included sample can carry a note, for example that "
+        "sample types are mixed while sample type is not a protected covariate: the run continues as configured. "
+        "Skipped: no_taxa_in_input means correction, normalization and statistical testing were not run. "
+        "Empty unless batch correction was requested.",
     )
 
     return f"""<!DOCTYPE html>
@@ -443,12 +518,15 @@ def render(rows, record, qc_path, validation_report=None, consensus_status=None)
 {classification}
 {consensus_banner(consensus_status)}
 {decontam}
+{depth_by_type(rows, sample_batches(decontam_evidence))}
+{render_decontam_evidence(decontam_evidence, rows)}
 {batch}
+{render_batch_evidence(batch_evidence or [])}
 {validation_section(validation_report)}
 <footer>
-  Every number here comes from <code>{html.escape(str(qc_path.name))}</code>; this page
-  does not re-read the results tree, so the two cannot disagree.<br>
-  Counts and rates only — no sequence and no clinical value. The page does carry
+  Sources: <code>{html.escape(str(qc_path.name))}</code> and explicitly supplied current-run
+  consensus, alignment-validation, decontamination and batch-correction evidence. Decontamination and batch-correction source hashes and totals are checked before rendering. No results-tree search.<br>
+  Counts, rates and declared sample-type labels; no sequences. The page does carry
   per-sample identifiers, so treat it as a sample-level table.<br>
   Colour encodes ordered depletion stages; every segment is labelled and repeated in the
   tables, so nothing depends on colour alone.
@@ -460,6 +538,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--qc-summary", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--decontam-evidence", type=Path, action="append", default=[],
+                        help="Explicit current-run decontamination report directory; repeat for multiple ranks")
+    parser.add_argument("--batch-evidence", type=Path, action="append", default=[],
+                        help="Explicit current-run batch-correction report directory; repeat for multiple ranks")
     parser.add_argument("--provenance", type=Path, default=None)
     parser.add_argument("--consensus-status", type=Path, default=None,
                         help="CONSENSUS_TAXA/consensus_status.tsv, when consensus ran")
@@ -479,7 +561,8 @@ def main() -> int:
     elif args.provenance and args.provenance.is_file():
         record = json.loads(args.provenance.read_text())
 
-    args.output.write_text(render(rows, record, args.qc_summary, args.validation_report, args.consensus_status))
+    args.output.write_text(render(rows, record, args.qc_summary, args.validation_report, args.consensus_status, args.decontam_evidence,
+                                   args.batch_evidence))
     print(f"Cohort report: {len(rows)} sample(s) -> {args.output}")
     return 0
 

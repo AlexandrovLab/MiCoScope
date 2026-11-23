@@ -215,3 +215,35 @@ class EndToEndTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DepthByTypeTests(unittest.TestCase):
+    """Reads per sample type next to the decontamination tables."""
+
+    def test_depth_table_and_ratio_to_controls(self):
+        rows = [sample_row(f"T{i}", reads_raw=str(v)) for i, v in enumerate([3000, 4000, 5000])]
+        rows += [sample_row(f"B{i}", reads_raw=str(v), decontam_sample_type="Blood", decontam_role="control") for i, v in enumerate([1000, 2000])]
+        page = render(rows)
+        self.assertIn("Sequencing depth by sample type", page)
+        self.assertIn("<td>Tumor</td><td>positive</td><td>3</td><td>4,000</td>", page)
+        self.assertIn("<td>Blood</td><td>control</td><td>2</td><td>1,500</td>", page)
+        self.assertIn("<td>2.67×</td>", page)
+
+    def test_library_records_preferred_over_reads_into_qc(self):
+        page = render([sample_row("T1", reads_raw="10", library_primary_records="9000")])
+        self.assertIn("<td>9,000</td>", page)
+
+    def test_no_section_without_decontamination(self):
+        page = render([sample_row("T1", decontam_sample_type="NA", decontam_role="NA")])
+        self.assertNotIn("Sequencing depth by sample type", page)
+
+    def test_depth_by_batch_and_type_with_ratio_within_batch(self):
+        rows = [sample_row("T1", reads_raw="4000"), sample_row("T2", reads_raw="9000"),
+                sample_row("B1", reads_raw="2000", decontam_sample_type="Blood", decontam_role="control"),
+                sample_row("B2", reads_raw="3000", decontam_sample_type="Blood", decontam_role="control")]
+        page = CR.depth_by_type(rows, {"T1": "Broad", "B1": "Broad", "T2": "Baylor", "B2": "Baylor"})
+        self.assertIn("Batch · sample type", page)
+        self.assertIn("<td>Broad · Tumor</td><td>positive</td><td>1</td><td>4,000</td>", page)
+        self.assertIn("<td>2.00×</td>", page)      # Broad tumour 4000 vs Broad blood 2000
+        self.assertIn("<td>3.00×</td>", page)      # Baylor tumour 9000 vs Baylor blood 3000
+        self.assertIn("Ratios compare with the controls of the same batch.", page)
