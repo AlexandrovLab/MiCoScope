@@ -13,11 +13,13 @@ gunzip -q ref/GCA_009914755.4_T2T-CHM13v2.0_genomic.fna.gz
 gunzip -q ref/GRCh38_latest_genomic.fna.gz
 
 echo 'decompressed files'
-# NOTE (CMPipeline, 2026-10-26): nothing above downloads ref/NC_001422.fna (phiX174), so this `cat`
-# writes the T2T FASTA alone and the index built from it holds no phiX -- which is what the TSCC
-# human-GCA-phix-db.mmi contains (docs/host_depletion_references.md). Left as is: changing it changes
-# host depletion for future index builds.
-cat ref/GCA_009914755.4_T2T-CHM13v2.0_genomic.fna ref/NC_001422.fna > ref/human-GCA-phix.fna
+# phiX174 (NC_001422.1, 5,386 bp), Illumina's sequencing spike-in, goes into the T2T index so host
+# depletion removes it. Until 2026-11-24 nothing here downloaded it and the `cat` silently produced a
+# T2T-only FASTA (docs/host_depletion_references.md); both steps now stop the script if they fail.
+wget -q -O ref/NC_001422.fna "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_001422.1&rettype=fasta&retmode=text"
+[ -s ref/NC_001422.fna ] || { echo "ERROR: phiX174 (NC_001422.1) download failed" >&2; exit 1; }
+cat ref/GCA_009914755.4_T2T-CHM13v2.0_genomic.fna ref/NC_001422.fna > ref/human-T2T-phiX.fna \
+    || { echo "ERROR: could not build ref/human-T2T-phiX.fna" >&2; exit 1; }
 
 curl -o ref/link_index https://raw.githubusercontent.com/human-pangenomics/HPP_Year1_Assemblies/main/assembly_index/Year1_assemblies_v2_genbank.index
 

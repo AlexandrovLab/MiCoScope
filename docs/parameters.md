@@ -124,7 +124,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | Parameter | Default | Description |
 |---|---|---|
 | `--hg38_db` | `null` | First host-depletion index: GRCh38.p14 RefSeq full assembly on TSCC (no decoys, EBV or HLA contigs). Set in a site profile or with --hg38_db |
-| `--t2t_phix_db` | `null` | Second host-depletion index, T2T-CHM13v2.0. Despite the name it contains **no phiX** ([host_depletion_references.md](host_depletion_references.md)); the name is kept for compatibility. Set in a site profile or with --t2t_phix_db |
+| `--t2t_phix_db` | `null` | Second host-depletion index: T2T-CHM13v2.0 plus phiX174, so Illumina's PhiX spike-in is removed (TSCC: `human-T2T-phiX-db.mmi` since 24 Nov 2026; the earlier `human-GCA-phix-db.mmi` held T2T only, see [host_depletion_references.md](host_depletion_references.md)). Set in a site profile or with --t2t_phix_db |
 | `--pangenome_db` | `null` | optional .mmi file or directory containing .mmi files |
 | `--kraken_db` | `null` | Set in a site profile or with --kraken_db |
 | `--metaphlan_db` | `null` | the default MetaPhlAn database directory; set in a site profile (TSCC: vJan26) or with --metaphlan_db |

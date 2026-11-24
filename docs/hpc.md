@@ -26,7 +26,7 @@ and the output directory.
 # every #SBATCH line directly under the shebang: directives after the first command are ignored
 
 nextflow run /path/to/CMPipeline/main.nf -profile slurm -c my-site.config \
-    --sample samples.csv --hg38_db /refs/human-GRC-db.mmi --t2t_phix_db /refs/human-GCA-phix-db.mmi \
+    --sample samples.csv --hg38_db /refs/human-GRC-db.mmi --t2t_phix_db /refs/human-T2T-phiX-db.mmi \
     --kraken_db /db/krakenuniq --metaphlan_db /db/metaphlan --run_decontam false -resume
 ```
 
