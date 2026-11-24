@@ -36,7 +36,13 @@ species table and on its genus roll-up.
    relative to the row's Bracken estimate (review #3/#16/#17): a ratio far below 1 means the estimate
    rests mostly on statistical redistribution rather than aligned reads. Reporting only, never a pass
    criterion, and NA when the estimate is 0; because one read can support several taxa, summed
-   per-taxon support must not be read as distinct reads. Statuses:
+   per-taxon support must not be read as distinct reads. `low_support_flag` (review #3) is `yes` when
+   the Bracken estimate is at least 1,000 reads and `support_to_bracken_ratio` is below 0.01, so a
+   10,000-read call backed by about 20 alignments stands out from a well-supported one; `no` otherwise,
+   `NA` at estimate 0. It is a **flag, not a filter**: it never changes a status, the mask or any count,
+   because what a low ratio means (redistribution, a missing reference genome, or a spurious call) still
+   needs reading per case. The thresholds are `validation_score.py` options (`--low_support_min_estimate`,
+   `--low_support_ratio`), not pipeline parameters. Statuses:
    - tested in this order: `unsupported` if Bracken gave it at least 25 reads but fewer than 10 align to
      it (`--validation_min_confirmed`; the cutoff PRISM uses; the reads are not this species');
      `insufficient` if fewer than 25 supporting reads over all its genomes;

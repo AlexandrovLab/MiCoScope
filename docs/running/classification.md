@@ -82,6 +82,17 @@ classified. Whether the recovery is the same for every taxon, and whether it add
 normals as to tumours, is being tested before cohort numbers are compared (test plan,
 2026-10-01). To reproduce an older run exactly, pass `--extract_low_score_mapped off`.
 
+## Duplicate-flagged and QC-failed reads
+
+Reads are **never excluded** because they carry the duplicate (0x400) or QC-fail (0x200) flag, on any input
+route: extraction drops only secondary and supplementary records. For BAM/CRAM input the QC summary counts
+how many primary records, and how many extracted reads, carry each flag and both (`library_duplicate_records`,
+`library_qcfail_records`, `extracted_duplicate_reads` and the related columns, with percentages), so the
+inclusion policy can be judged on real numbers (review #12). FASTQ carries no flags: those columns are `NA`
+for FASTQ input (information unavailable, not zero). Because neither route filters on the flags, a sample entered as BAM and the
+same sample entered as FASTQ keep the same reads by this rule; a duplicate-collapsing step would have to be
+added to both routes to stay comparable.
+
 ## Samples with no reads
 
 A sample that has no reads left after filtering is logged and dropped; the rest
@@ -112,7 +123,7 @@ species table, as a share of all species-level reads.
 | Parameter | Default | Meaning |
 |---|---|---|
 | `--consensus_min_reads` | `100000` | the MetaPhlAn gate above; a non-negative integer (`1e5` is rejected) |
-| `--bracken_read_length` | `auto` | Bracken `-r`. `auto`: per sample, the median read length of the first 1,000,000 host-depleted reads entering KrakenUniq picks the closest `database<N>mers.kmer_distrib` (ties go shorter), written to `<sample>.bracken_read_length.tsv`. An integer forces one length for every sample, checked against the database at launch |
+| `--bracken_read_length` | `auto` | Bracken `-r`. `auto`: per sample, the median read length of the first 1,000,000 host-depleted reads entering KrakenUniq picks the closest `database<N>mers.kmer_distrib` (ties go shorter), written to `<sample>.bracken_read_length.tsv`. An integer forces one length for every sample, checked against the database at launch. The first million reads are taken in file order, so for paired input the median is dominated by whichever mate comes first (mate imbalance); a known limitation until paired-read handling (deferred review items #9–#11) is revisited |
 | `--bracken_threshold` | `2` | Bracken `-t`: the minimum reads a taxon needs to be re-estimated. A read threshold, not a thread count. A thin sample in which no taxon reaches it gets an empty no-call table instead of failing the run |
 
 ```bash

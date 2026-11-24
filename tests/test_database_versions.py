@@ -295,11 +295,15 @@ class CommittedManifest(unittest.TestCase):
                          "fe43219f1104801e2a7e47a47209384def3fb312ef4e8a147c603c9135c9a8a6")
         self.assertEqual(self.rows["hg38_db"]["fingerprint"],
                          "92b1f812752bfe3097d302c0336cbb31135db729ab2361be5b30474fb43ab758")
-        self.assertEqual(self.rows["t2t_phix_db"]["fingerprint"],
-                         "8e2257962675aad5ef92adff8890084e51c77bc8e55e8b11b800d74ac3bfb196")
+        # t2t_phix_db is no longer pksProfiler's file: CMPipeline's index adds PhiX (24 Nov 2026).
+        self.assertNotEqual(self.rows["t2t_phix_db"]["fingerprint"],
+                            "8e2257962675aad5ef92adff8890084e51c77bc8e55e8b11b800d74ac3bfb196")
 
-    def test_t2t_row_says_no_phix(self):
-        self.assertIn("NO phiX", self.rows["t2t_phix_db"]["database"])
+    def test_t2t_row_includes_phix(self):
+        row = self.rows["t2t_phix_db"]
+        self.assertIn("phiX174 NC_001422.1", row["database"])
+        self.assertIn("26 sequences", row["database"])
+        self.assertTrue(row["path"].endswith("human-T2T-phiX-db.mmi"))
 
     def test_documented(self):
         outputs = (ROOT / "docs" / "outputs.md").read_text()

@@ -125,6 +125,10 @@ def main(argv=None):
     ap.add_argument("--bin_size", type=int, default=10_000)
     ap.add_argument("--group_rescue_shared", action="store_true",
                     help="also rescue cells failed on unique_fraction alone (shadows of a relative) at group level")
+    ap.add_argument("--low_support_min_estimate", type=float, default=1000,
+                    help="low_support_flag: Bracken estimate at or above which low alignment support is flagged")
+    ap.add_argument("--low_support_ratio", type=float, default=0.01,
+                    help="low_support_flag: supporting reads / Bracken estimate below this is flagged")
     ap.add_argument("--export_reads", action="store_true",
                     help="write <sample>.validated_reads.fasta.gz (reads supporting validated taxa)")
     a = ap.parse_args(argv)
@@ -217,6 +221,13 @@ def main(argv=None):
             scorers[x].finish(); done.add(x)
 
 
+def low_support_flag(estimate, supporting, min_estimate=1000, max_ratio=0.01):
+    """Review #3: "yes" | "no" | "NA". Reporting only -- the caller never uses it for a status."""
+    if not estimate:
+        return "NA"
+    return "yes" if estimate >= min_estimate and supporting / estimate < max_ratio else "no"
+
+
 # minimap2_count = reads minimap2 assigns to this taxon ALONE (= unique_reads): the alignment-based
 # count the DESIGN promised, reported for sensitivity analysis and never used downstream (B08).
 # supporting/unique/multi pool every genome of the taxon; breadth, bins and reads_on_best use the
@@ -229,6 +240,11 @@ COLS = ["sample", "taxon", "members", "bracken_reads", "minimap2_count", "suppor
         # read tied across species supports each of them, so summed support exceeds distinct reads.
         # NA when the estimate is 0.
         "support_to_bracken_ratio", "unique_to_bracken_ratio",
+        # Low-support flag (review #3): "yes" when Bracken estimates many reads (>= --low_support_min_estimate)
+        # but few of them align (support_to_bracken_ratio < --low_support_ratio), so a 10,000-read call
+        # backed by ~20 alignments is visibly different from a well-supported one. A FLAG ONLY: it never
+        # changes a status, the mask or any count (the plan adds no new exclusion rule). NA at estimate 0.
+        "low_support_flag",
         "best_genome", "reads_on_best", "genome_len",
         "observed_breadth", "expected_breadth", "breadth_ratio", "bins_hit", "bins_expected",
         "bins_ratio", "median_identity", "status", "fail_reason", "bins_reads", "reads_for_bins",
@@ -331,6 +347,8 @@ class SampleScorer:
             est = self.bracken[t]
             row["support_to_bracken_ratio"] = f"{row['supporting_reads'] / est:.4f}" if est else "NA"
             row["unique_to_bracken_ratio"] = f"{uniq[t] / est:.4f}" if est else "NA"
+            row["low_support_flag"] = low_support_flag(est, row["supporting_reads"],
+                                                       a.low_support_min_estimate, a.low_support_ratio)
             tot = uniq[t] + multi[t]
             row["unique_fraction"] = f"{uniq[t] / tot:.4f}" if tot else "NA"
             fail = []

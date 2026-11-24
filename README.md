@@ -13,8 +13,8 @@ remove reagent contaminants, correct batch effects and profile function with HUM
    reads when the aligner was `bwa mem -T` below 30 (or takes single- or paired-end FASTQ), and filters the
    reads with fastp (quality, and adapters against a 5-sequence Illumina list).
 2. **Host depletion** removes reads matching the GRCh38 and T2T-CHM13 minimap2 indexes, and
-   optionally a set of pangenome indexes. The T2T index (`--t2t_phix_db`) contains **no phiX** despite
-   its name, so phiX spike-in is not removed ([host_depletion_references.md](docs/host_depletion_references.md)).
+   optionally a set of pangenome indexes. The T2T index (`--t2t_phix_db`) also holds PhiX-174, so
+   Illumina's PhiX spike-in is removed here ([host_depletion_references.md](docs/host_depletion_references.md)).
 3. **Classification** runs KrakenUniq and Bracken on every sample, and MetaPhlAn 4 on samples with at
    least `--consensus_min_reads` (100,000) microbial reads: bacteria, archaea, fungi and protozoa
    (`--microbial_scope`).
@@ -50,7 +50,7 @@ cd CMPipeline
 | Database | Parameter | Needed for |
 |---|---|---|
 | GRCh38 minimap2 index | `--hg38_db` | host depletion |
-| T2T-CHM13 minimap2 index (no phiX despite the name; see docs/host_depletion_references.md) | `--t2t_phix_db` | host depletion |
+| T2T-CHM13 + PhiX-174 minimap2 index (see docs/host_depletion_references.md) | `--t2t_phix_db` | host depletion |
 | HPRC pangenome `.mmi` (one file or a directory) | `--pangenome_db` | optional extra host depletion |
 | KrakenUniq/Bracken database | `--kraken_db` | classification; must contain `database<N>mers.kmer_distrib` files (one per read length; `--bracken_read_length auto` picks per sample) |
 | MetaPhlAn 4 database (vJan26 by default) | `--metaphlan_db` | classification |
@@ -94,7 +94,7 @@ must be unique and may contain letters, numbers, `.`, `_` and `-`. Use absolute 
 nextflow run main.nf -profile tscc \
     --sample samples.csv \
     --hg38_db /refs/human-GRC-db.mmi \
-    --t2t_phix_db /refs/human-GCA-phix-db.mmi \
+    --t2t_phix_db /refs/human-T2T-phiX-db.mmi \
     --kraken_db /db/krakenuniq \
     --metaphlan_db /db/metaphlan \
     --run_decontam false \
