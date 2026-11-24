@@ -638,7 +638,10 @@ def parse_sample_validation(path: Path) -> dict[str, dict]:
 
 
 def parse_batch_sample_status(path: Path) -> dict[str, str]:
-    """<rank>.batch_sample_status.tsv -> {sample: 'included' | 'excluded: <reason>'}.
+    """<rank>.batch_sample_status.tsv -> {sample: 'included' | 'included: <note>' | 'excluded: <reason>'}.
+
+    An included row carries a note instead of 'eligible' when the run recorded one for the cohort
+    (for example mixed sample types without sample type among the covariates, decided 2026-11-17).
 
     `unused` rows (metadata without a count-table column) are not samples of the analysis.
     """
@@ -648,16 +651,19 @@ def parse_batch_sample_status(path: Path) -> dict[str, str]:
             sample = (record.get("sample") or "").strip()
             status = (record.get("status") or "").strip()
             reason = (record.get("reason") or "").strip()
-            if not sample or status not in ("included", "excluded", "unused"):
+            if not sample or status not in ("included", "excluded", "unused", "skipped"):
                 raise ValueError(f"{path.name}: invalid batch ledger row {sample!r} / {status!r}")
-            if status == "excluded" and not reason:
+            if status in ("excluded", "skipped") and not reason:
                 raise ValueError(f"{path.name}: excluded sample {sample} has no reason")
             # Every row counts, unused ones included: an ID may appear once per ledger.
             if sample in seen:
                 raise ValueError(f"{path.name}: duplicate sample {sample}")
             seen.add(sample)
             if status != "unused":
-                statuses[sample] = "included" if status == "included" else f"excluded: {reason}"
+                if status == "included":
+                    statuses[sample] = "included" if reason in ("", "eligible") else f"included: {reason}"
+                else:
+                    statuses[sample] = f"{status}: {reason}"
     return statuses
 
 

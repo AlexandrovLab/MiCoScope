@@ -1,9 +1,9 @@
 # Batch correction (ConQuR) + normalisation. Versions pinned to the 2026-09-23 build. The exact
 # build is conda_envs/lock/batch_correction_env.linux-64.txt, which Nextflow builds. ConQuR's CRAN
-# dependencies come from conda-forge (audit D03). The two packages no channel provides, cqrReg 1.2.1
+# dependencies come from conda-forge. The two packages no channel provides, cqrReg 1.2.1
 # and ConQuR itself (ivartb/ConQuR_par@ff233085, params.conqur_sha in main.nf), are built from
 # conda_envs/recipes/ into conda_envs/local_channel/ and appended to that lockfile under
-# @LOCAL_CHANNEL@; Modules/batch_correction.nf refuses any other ConQuR (audit A14/A17).
+# @LOCAL_CHANNEL@; Modules/batch_correction.nf refuses any other ConQuR.
 # Change the pin in main.nf, the r-conqur recipe and scripts/install_conqur.R together
 # (tests/test_docs.py, tests/test_local_conda_channel.py check).
 name: batch_correction_env
@@ -12,7 +12,7 @@ channels:
   - bioconda
   - nodefaults
 dependencies:
-  # Every package pinned (audit D03): the unpinned ones took the versions in
+  # Every package pinned: the unpinned ones took the versions in
   # lock/batch_correction_env.linux-64.txt, the env the pipeline was verified with.
   - r-base=4.3.3
   - compilers=2.0.0

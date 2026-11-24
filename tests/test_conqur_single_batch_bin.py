@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""K04: Tune_ConQuR must not stop a whole rank when a prevalence bin sits in one batch (2026-10-06).
+"""Tune_ConQuR must not stop a whole rank when a prevalence bin sits in one batch (2026-10-06).
 
 ConQuR's uncorrected-table benchmark called adonis(tab ~ batchid) without the single-batch guard it
 uses for corrected candidates. CRC50 Test 3 lost genus batch correction to it. The pipeline calls a
@@ -27,7 +27,7 @@ class GuardWiring(unittest.TestCase):
         self.assertNotIn("result <- Tune_ConQuR(", text)
 
     def test_modification_is_recorded(self):
-        self.assertIn("audit K04", (ROOT / "conda_envs" / "local_channel" / "NOTICE.md").read_text())
+        self.assertIn("Run-time modification of ConQuR", (ROOT / "conda_envs" / "local_channel" / "NOTICE.md").read_text())
 
 
 R_CHECK = r'''
@@ -42,7 +42,7 @@ stopifnot(grepl("all(is.na(as.numeric(R2$batch_R2)))", txt, fixed = TRUE))
 # A different ConQuR must stop, not run unguarded.
 f <- ConQuR::Tune_ConQuR; body(f) <- quote(NULL)
 msg <- tryCatch({guarded_tune_conqur(f); "no error"}, error = conditionMessage)
-stopifnot(grepl("Cannot apply the K04 Tune_ConQuR guard", msg, fixed = TRUE))
+stopifnot(grepl("Cannot apply the single-batch Tune_ConQuR guard", msg, fixed = TRUE))
 cat("OK\n")
 '''
 

@@ -33,20 +33,22 @@
 
 # ==============================================================================
 
-# Everything comes from conda_envs/batch_correction_env.yml plus scripts/install_conqur.R (the
-# pinned ivartb/ConQuR_par fork). Nothing is installed at run time: the earlier block installed
+# Everything comes from the explicit batch environment lock and its local ConQuR/cqrReg packages.
+# The ConQuR upstream commit and local compatibility patch are checked by the module. Nothing is installed at run time: the earlier block installed
 # pacman/BiocManager/devtools, an unpinned ConQuR and "DEICODE" (a Python package) on every run,
-# which silently changed the software between runs (audit A14/D03, 2026-09-23).
+# which silently changed the software between runs (2026-09-23).
 suppressPackageStartupMessages({
   for (pkg in c("tidyverse", "vegan", "ConQuR", "argparse", "zCompositions",
                 "doParallel", "foreach", "iterators")) {
     if (!requireNamespace(pkg, quietly = TRUE))
       stop("ERROR: R package '", pkg, "' is missing from the batch-correction environment. ",
-           "Rebuild the env from conda_envs/batch_correction_env.yml and run scripts/install_conqur.R.")
+           "Rebuild a new prefix from the explicit lock with scripts/setup_batch_env.sh.")
     library(pkg, character.only = TRUE)
   }
 })
-## RCLR: DEICODE is a Python package, never available here; this is the implementation used.
+## RCLR transform only (log ratio to the geometric mean of the non-zero values; the caller sets zero entries
+## to 0). This is not robust PCA (RPCA, e.g. DEICODE/Gemelli, which adds matrix completion); PERMANOVA on it
+## with Euclidean distance is a sensitivity analysis.
 rclr_f <- function(mat){
   t(apply(mat, 1, function(x){
     nz <- x>0; g <- exp(mean(log(x[nz]))); y <- rep(NA, length(x))
@@ -128,34 +130,83 @@ select_optimal_reference_batch <- function(tab, meta, batch_col) {
 }
 
 # ---------- PERMANOVA ---------------------------------------------------------
-run_permanova <- function(mat, meta, rhs_formula, dist_meth, transformed = FALSE){
+run_permanova <- function(mat, meta, rhs_formula, dist_meth, transformed = FALSE, mode = NULL){
   smp <- rownames(mat)
   dist <- batch_distance(mat, meta, dist_meth, transformed)
   # drop = FALSE: with ONE predictor (batch only -- `--covariates none`, or every covariate
   # filtered out) `[` returned a vector and adonis2 failed "'.' in formula and no 'data' argument".
   pdat <- meta[smp, all.vars(rhs_formula), drop = FALSE]
   # by = "margin" can fail when a strong correction makes the Bray batch sum of squares negative
-  # (audit A12). Fall back to sequential terms with batch entered LAST (so its R2 is still the
+  # Fall back to sequential terms with batch entered LAST (so its R2 is still the
   # batch effect after covariates), and say so, rather than crashing a successful correction.
+  # mode = "terms_batch_last" forces the fallback, so several tables can be compared under one mode.
   evaluation_mode <- "margin"
-  res <- tryCatch(
+  terms_last <- function() {
+    evaluation_mode <<- "terms_batch_last"
+    vars <- all.vars(rhs_formula); vars <- c(setdiff(vars, vars[1]), vars[1])
+    adonis2(reformulate(vars, response = "dist"), data = pdat, permutations = 999, by = "terms")
+  }
+  res <- if (identical(mode, "terms_batch_last")) terms_last() else tryCatch(
     adonis2(dist ~ ., data = pdat, permutations = 999, by = "margin"),
     error = function(e) {
       cat("WARN: PERMANOVA by='margin' failed (", conditionMessage(e), "); using by='terms' with batch last\n")
-      evaluation_mode <<- "terms_batch_last"
-      vars <- all.vars(rhs_formula); vars <- c(setdiff(vars, vars[1]), vars[1])
-      adonis2(reformulate(vars, response = "dist"), data = pdat, permutations = 999, by = "terms")
+      terms_last()
     })
   as_tibble(res, rownames = "Term") %>% dplyr::select(Term, Df, R2, `Pr(>F)`) %>%
     mutate(Evaluation = evaluation_mode, Distance = dist_meth, N = nrow(mat),
            Model = paste(deparse(rhs_formula), collapse = " "))
 }
 
+# Dispersion check: PERMANOVA R2 can reflect a difference in spread between groups rather
+# than in location. betadisper on the same Bray distances, per table and grouping; a failure is recorded, not fatal.
+dispersion_check <- function(tables, meta, groups) {
+  rows <- list()
+  for (tag in names(tables)) for (grp in groups) {
+    rows[[length(rows) + 1]] <- tryCatch({
+      bd <- betadisper(vegdist(tables[[tag]], "bray"), droplevels(factor(meta[rownames(tables[[tag]]), grp])))
+      pt <- permutest(bd, permutations = 999)
+      data.frame(Source = tag, Group = grp, F = pt$tab[1, "F"], p = pt$tab[1, "Pr(>F)"], N = nrow(tables[[tag]]),
+                 Distance = "bray", Status = "computed")
+    }, error = function(e) data.frame(Source = tag, Group = grp, F = NA_real_, p = NA_real_, N = nrow(tables[[tag]]),
+                                       Distance = "bray", Status = paste("not computed:", conditionMessage(e))))
+  }
+  do.call(rbind, rows)
+}
+
+# Within-patient permutations: samples from one patient (e.g. TCGA tumour and solid normal) are not independent. R2 does not
+# depend on the permutation scheme; for terms that vary within patients the p-value is recomputed with
+# permutations restricted within patients. Terms constant within patients keep the free-permutation p only.
+patient_restricted_p <- function(mat, meta, rhs_formula, dist_meth, transformed, patient) {
+  if (is.null(patient)) return(NULL)
+  pt <- patient[rownames(mat)]
+  if (anyNA(pt)) return(list(note = "patient missing for some samples; not computed"))
+  multi <- sum(table(pt) > 1L)
+  if (multi == 0L) return(list(note = "no patient has more than one sample; not computed", n_patients = length(unique(pt)), n_multi = 0L))
+  vars <- all.vars(rhs_formula)
+  pdat <- meta[rownames(mat), vars, drop = FALSE]
+  varies <- vapply(vars, function(v) any(tapply(as.character(pdat[[v]]), pt, function(x) length(unique(x)) > 1L)), logical(1))
+  d <- batch_distance(mat, meta, dist_meth, transformed)
+  res <- tryCatch(adonis2(d ~ ., data = pdat, by = "margin",
+                          permutations = permute::how(blocks = factor(pt), nperm = 999)),
+                  error = function(e) NULL)
+  p <- setNames(rep(NA_real_, length(vars)), vars)
+  if (!is.null(res)) for (v in vars[varies]) if (v %in% rownames(res)) p[[v]] <- res[v, "Pr(>F)"]
+  list(p = p, n_patients = length(unique(pt)), n_multi = multi,
+       note = if (is.null(res)) "within-patient permutation failed" else "computed")
+}
+
 # ---------- Evaluate batch effect (PERMANOVA-based) ---------------------------
-evaluate_batch_effect <- function(data, meta, batch_col, covariates) {
+evaluate_batch_effect <- function(data, meta, batch_col, covariates, mode = NULL) {
   
   formula <- reformulate(c(batch_col, covariates))
-  perm_result <- run_permanova(data, meta, formula, "bray")
+  # Judge the batch effect on relative abundances. Bray on raw counts read a pure
+  # sequencing-depth difference between batches as a batch effect (R2 0.15-0.37 with identical composition;
+  # synthetic check). A table with a zero-total sample cannot be evaluated.
+  data <- as.matrix(data)
+  if (any(!is.finite(rowSums(data))) || any(rowSums(data) <= 0))
+    return(list(batch_r2 = NA, batch_p = NA, covariate_r2 = NA, mode = NA_character_, full_result = NULL))
+  perm_result <- run_permanova(data / rowSums(data), meta, formula, "bray", transformed = TRUE, mode = mode)
+  eval_mode <- perm_result$Evaluation[1]
   
   batch_r2 <- perm_result %>% 
     filter(Term == batch_col) %>% 
@@ -167,6 +218,7 @@ evaluate_batch_effect <- function(data, meta, batch_col, covariates) {
       batch_r2 = NA,
       batch_p = NA,
       covariate_r2 = NA,
+      mode = eval_mode,
       full_result = perm_result
     ))
   }
@@ -185,8 +237,22 @@ evaluate_batch_effect <- function(data, meta, batch_col, covariates) {
     batch_r2 = batch_r2,
     batch_p = batch_p,
     covariate_r2 = covariate_r2,
+    mode = eval_mode,
     full_result = perm_result
   ))
+}
+
+# One PERMANOVA mode for every candidate: candidates are compared only under one PERMANOVA mode. When the evaluations of the
+# baseline and the candidates used different modes (margin failed for some), all are re-evaluated with
+# sequential terms and batch last. evals and tables are named lists in the same order.
+align_eval_modes <- function(evals, tables, meta, batch_col, covariates) {
+  modes <- vapply(evals, function(e) if (is.null(e$mode)) NA_character_ else as.character(e$mode), character(1))
+  if (length(unique(modes)) <= 1L) return(list(evals = evals, note = ""))
+  cat("NOTE: PERMANOVA modes differ (", paste(names(modes), modes, sep = "=", collapse = ", "),
+      "); re-evaluating all with terms_batch_last\n")
+  evals <- lapply(tables, function(t) evaluate_batch_effect(t, meta, batch_col, covariates, mode = "terms_batch_last"))
+  list(evals = evals, note = paste0("; all candidates re-evaluated with terms_batch_last because modes differed (",
+                                    paste(names(modes), modes, sep = "=", collapse = ", "), ")"))
 }
 
 # ---------- Run single phase --------------------------------------------------
@@ -250,7 +316,7 @@ run_phase <- function(phase_num, tab, meta, batch_col, covars,
   assign("batchid", batchid, envir = .GlobalEnv)
 
   tryCatch({
-    # K04: Tune_ConQuR with the single-batch guard on its uncorrected benchmark (batch_contract.R).
+    # Tune_ConQuR with the single-batch guard on its uncorrected benchmark (batch_contract.R).
     result <- guarded_tune_conqur()(
       tax_tab = tab,
       batchid = batchid,
@@ -316,7 +382,11 @@ run_vanilla_conqur <- function(tab_raw, meta, batch_col, covars, corr_dir) {
 
   # Baseline evaluation
   baseline <- evaluate_batch_effect(tab, meta, batch_col, valid_covars)
+  assign("decision_baseline", baseline, envir = .GlobalEnv)   # values the correction decision used, for the report
   cat(sprintf("Baseline Batch R2: %.4f (p = %.4f)\n", baseline$batch_r2, baseline$batch_p))
+  d0 <- decide_correction(baseline$batch_r2, numeric(0), baseline_p = baseline$batch_p)
+  if (d0$decision %in% c("uncorrected_not_evaluable", "uncorrected_no_batch_effect"))
+    return(uncorrected_by_decision(tab, baseline$batch_r2, d0))
 
   # Select reference batch
   ref_batch_pool <- select_optimal_reference_batch(tab, meta, batch_col)
@@ -357,8 +427,11 @@ run_vanilla_conqur <- function(tab_raw, meta, batch_col, covars, corr_dir) {
     cat(sprintf("Before: Batch R2 = %.4f\n", baseline$batch_r2))
     cat(sprintf("After:  Batch R2 = %.4f\n", post_eval$batch_r2))
     cat(sprintf("Reduction: %.1f%%\n", report_reduction_percent(baseline$batch_r2, baseline$batch_r2 - delta_r2)))
+    d <- decide_correction(baseline$batch_r2, c(vanilla = post_eval$batch_r2))
+    if (d$decision != "corrected") return(uncorrected_by_decision(tab, baseline$batch_r2, d, elapsed))
 
     return(list(
+      decision = d$decision, decision_reason = d$reason,
       data = corrected,
       method_matrix = NULL,
       phase_used = "vanilla",
@@ -376,6 +449,16 @@ run_vanilla_conqur <- function(tab_raw, meta, batch_col, covars, corr_dir) {
     cat("Error:", e$message, "\n")
     return(list(data = tab, phase_used = "vanilla", success = FALSE, message = e$message))
   })
+}
+
+# ---------- Decision outcome that keeps the uncorrected table -------------------
+# A deliberate outcome, not a failure: the run continues, the table is
+# published as UNCORRECTED_by_decision.tsv (never as ConQuR_tuned.tsv) and the reason is recorded.
+uncorrected_by_decision <- function(tab, baseline_r2, d, elapsed = 0) {
+  cat("✓ DECISION: keep the uncorrected table (", d$decision, "): ", d$reason, "\n", sep = "")
+  list(data = tab, method_matrix = NULL, phase_used = 0, baseline_r2 = baseline_r2,
+       final_r2 = baseline_r2, r2_reduction = NA_real_, elapsed = elapsed, success = TRUE,
+       decision = d$decision, decision_reason = d$reason)
 }
 
 # ---------- Auto-phase workflow -----------------------------------------------
@@ -405,6 +488,7 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
   cat(strrep("-", 70), "\n")
 
   baseline <- evaluate_batch_effect(tab, meta, batch_col, valid_covars)
+  assign("decision_baseline", baseline, envir = .GlobalEnv)   # values the correction decision used, for the report
   
   cat(sprintf("Batch R²:     %.4f (p = %.4f)\n", 
               baseline$batch_r2, baseline$batch_p))
@@ -412,6 +496,9 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
     cat(sprintf("Covariate R²: %.4f\n", baseline$covariate_r2))
   }
   cat(strrep("-", 70), "\n\n")
+  d0 <- decide_correction(baseline$batch_r2, numeric(0), baseline_p = baseline$batch_p)
+  if (d0$decision %in% c("uncorrected_not_evaluable", "uncorrected_no_batch_effect"))
+    return(uncorrected_by_decision(tab, baseline$batch_r2, d0))
   
   # Select reference batches
   ref_batch_pool <- select_optimal_reference_batch(tab, meta, batch_col)
@@ -438,6 +525,9 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
   cat("\n>>> EVALUATING PHASE 1 <<<\n")
   phase1_eval <- evaluate_batch_effect(phase1_result$data, meta, 
                                         batch_col, valid_covars)
+  al <- align_eval_modes(list(baseline = baseline, phase1 = phase1_eval),
+                         list(baseline = tab, phase1 = phase1_result$data), meta, batch_col, valid_covars)
+  baseline <- al$evals$baseline; phase1_eval <- al$evals$phase1; mode_note <- al$note
   
   delta_r2 <- baseline$batch_r2 - phase1_eval$batch_r2
   r2_reduction <- delta_r2 / baseline$batch_r2
@@ -456,7 +546,7 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
   if (!is.na(baseline$covariate_r2) && baseline$covariate_r2 > 0) {
     covar_reduction <- (baseline$covariate_r2 - phase1_eval$covariate_r2) / 
                        baseline$covariate_r2
-    if (covar_reduction > 0.2) {
+    if (isTRUE(covar_reduction > 0.2)) {
       cat(sprintf("⚠ WARNING:    Covariate R² reduced by %.1f%% (possible overcorrection)\n", 
                   covar_reduction * 100))
     }
@@ -464,7 +554,7 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
   cat(strrep("-", 70), "\n\n")
   
   # Decision point
-  if (phase1_eval$batch_r2 < baseline$batch_r2 && r2_reduction >= r2_threshold) {
+  if (isTRUE(is.finite(phase1_eval$batch_r2) && phase1_eval$batch_r2 < baseline$batch_r2 && r2_reduction >= r2_threshold)) {
     cat("✓ DECISION: STOP at Phase 1\n")
     cat(sprintf("  R² reduction (%.1f%%) meets threshold (≥%.1f%%)\n", 
                 report_reduction_percent(baseline$batch_r2, baseline$batch_r2 - delta_r2), r2_threshold * 100))
@@ -481,10 +571,12 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
       elapsed = phase1_result$elapsed,
       success = TRUE
     )
+    d <- decide_correction(baseline$batch_r2, c(phase1 = phase1_eval$batch_r2), r2_threshold)
+    final_result$decision <- d$decision; final_result$decision_reason <- paste0(d$reason, mode_note)
     
   } else {
     # Need Phase 3
-    if (phase1_eval$batch_r2 >= baseline$batch_r2) {
+    if (!isTRUE(phase1_eval$batch_r2 < baseline$batch_r2)) {
       cat("⚠ DECISION: RUN PHASE 3\n")
       cat("  Phase 1 did not improve batch effect (R² unchanged or worse)\n")
     } else {
@@ -503,8 +595,14 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
                                 ref_batch_pool, final_covars)
     
     if (!phase3_result$success) {
+      d <- decide_correction(baseline$batch_r2, c(phase1 = phase1_eval$batch_r2), r2_threshold)
+      if (d$decision != "corrected") {
+        final_result <- uncorrected_by_decision(tab, baseline$batch_r2, d, phase1_result$elapsed)
+        final_result$note <- "Phase 3 failed; Phase 1 did not improve"
+      } else {
       cat("\nPhase 3 failed. Using Phase 1 result.\n")
       final_result <- list(
+        decision = d$decision, decision_reason = paste0(d$reason, mode_note),
         data = phase1_result$data,
         method_matrix = phase1_result$method_matrix,
         phase_used = 1,
@@ -515,11 +613,18 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
         success = TRUE,
         note = "Phase 3 failed, used Phase 1"
       )
+      }
     } else {
       # Evaluate Phase 3
       cat("\n>>> EVALUATING PHASE 3 <<<\n")
       phase3_eval <- evaluate_batch_effect(phase3_result$data, meta, 
                                             batch_col, valid_covars)
+      al <- align_eval_modes(list(baseline = baseline, phase1 = phase1_eval, phase3 = phase3_eval),
+                             list(baseline = tab, phase1 = phase1_result$data, phase3 = phase3_result$data),
+                             meta, batch_col, valid_covars)
+      baseline <- al$evals$baseline; phase1_eval <- al$evals$phase1; phase3_eval <- al$evals$phase3
+      if (nzchar(al$note)) mode_note <- al$note
+      delta_r2 <- baseline$batch_r2 - phase1_eval$batch_r2
       
       phase3_delta <- baseline$batch_r2 - phase3_eval$batch_r2
       phase3_reduction <- phase3_delta / baseline$batch_r2
@@ -534,8 +639,12 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
                   phase3_eval$batch_r2, report_reduction_percent(baseline$batch_r2, phase3_eval$batch_r2)))
       cat(strrep("-", 70), "\n\n")
       
-      # Compare and select
-      if (phase3_eval$batch_r2 < phase1_eval$batch_r2) {
+      # Compare and select: neither NA nor a candidate worse than the baseline can be chosen.
+      d <- decide_correction(baseline$batch_r2, c(phase1 = phase1_eval$batch_r2, phase3 = phase3_eval$batch_r2), r2_threshold)
+      d$reason <- paste0(d$reason, mode_note)
+      if (d$decision != "corrected") {
+        final_result <- uncorrected_by_decision(tab, baseline$batch_r2, d, phase1_result$elapsed + phase3_result$elapsed)
+      } else if (identical(d$choice, "phase3")) {
         improvement <- ((phase1_eval$batch_r2 - phase3_eval$batch_r2) / 
                        phase1_eval$batch_r2) * 100
         cat("✓ DECISION: Use Phase 3 result\n")
@@ -543,6 +652,7 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
                     improvement))
         
         final_result <- list(
+          decision = d$decision, decision_reason = d$reason,
           data = phase3_result$data,
           method_matrix = phase3_result$method_matrix,
           phase_used = 3,
@@ -559,6 +669,7 @@ run_auto_phase <- function(tab_raw, meta, batch_col, covars,
         cat("  Phase 3 did not improve upon Phase 1\n")
         
         final_result <- list(
+          decision = d$decision, decision_reason = d$reason,
           data = phase1_result$data,
           method_matrix = phase1_result$method_matrix,
           phase_used = 1,
@@ -676,6 +787,20 @@ parser$add_argument("--sample_id_column", type = "character", default = "sample_
                     help = "metadata column holding sample IDs (the pipeline passes decontam's)")
 parser$add_argument("--allow_uncorrected", action = "store_true", default = FALSE,
                     help = "on failure, continue with raw counts saved as UNCORRECTED_passthrough.tsv")
+parser$add_argument("--control_values", type = "character", default = NULL,
+                    help = "comma-separated decontamination control labels in --type_column; excluded from correction unless --include_controls")
+parser$add_argument("--patient_column", type = "character", default = NULL,
+                    help = "metadata column naming each sample's patient; restricts PERMANOVA permutations within patients")
+parser$add_argument("--effect_column", type = "character", default = NULL,
+                    help = "metadata column with two values; effect sizes before/after correction are also reported for it")
+parser$add_argument("--patient_from_tcga_barcode", action = "store_true", default = FALSE,
+                    help = "use the first 12 characters of the sample ID (TCGA-XX-XXXX) as the patient")
+parser$add_argument("--no_protect_sample_type", action = "store_true", default = FALSE,
+                    help = "do not add sample type as a protected covariate when several types remain (recorded)")
+parser$add_argument("--depth_covariate", action = "store_true", default = FALSE,
+                    help = "add log10 total count per sample (log_depth) as a covariate (off by default)")
+parser$add_argument("--include_controls", action = "store_true", default = FALSE,
+                    help = "keep decontamination controls in the correction cohort (a declared analysis choice)")
 parser$add_argument("--method", type = "character", default = "tune",
                    help = "Correction method: 'tune' (default, auto-phased Tune_ConQuR) or 'vanilla' (default ConQuR)")
 args <- parser$parse_args()
@@ -700,19 +825,19 @@ plot_dir <- file.path(dirname(args$prefix), "pcoa_plots"); dir.create(plot_dir, 
 
 # Parse covariates (comma-separated string to vector)
 covariate_vector <- trimws(unlist(strsplit(args$covariates, ",")))
-# "none" (or empty) stops the run: ConQuR needs >= 1 covariate (audit A02). A named covariate
+# "none" (or empty) stops the run: ConQuR needs >= 1 covariate. A named covariate
 # missing from the metadata also stops the run below. A covariate that is constant within any
 # batch also stops the run (prepare_batch_cohort in batch_contract.R): the requested model is
 # never changed silently.
 if (length(covariate_vector) == 0 || identical(tolower(covariate_vector), "none")) {
-  # ConQuR builds its model from covariates + batch and cannot run on batch alone (audit A02).
+  # ConQuR builds its model from covariates + batch and cannot run on batch alone.
   # Decided 2026-09-23 (Ammal): fail loudly rather than guess or pass raw counts off as corrected.
   write_status("failed", "no covariates requested (--covariates none); ConQuR needs >= 1 covariate that varies within batches")
   stop("ERROR: ConQuR needs >= 1 covariate that varies within batches; --covariates none cannot be batch-corrected.")
 }
 if (!identical(args$phase, "auto")) {
   # run_auto_phase always runs phase 1 then (if needed) phase 3; forcing a phase was never wired.
-  stop("ERROR: --phase '", args$phase, "' is not implemented; only 'auto' is (audit A11).")
+  stop("ERROR: --phase '", args$phase, "' is not implemented; only 'auto' is.")
 }
 cat("INFO: Using batch column:", args$batch_column, "\n")
 cat("INFO: Using covariates:", paste(covariate_vector, collapse = ", "), "\n")
@@ -728,6 +853,14 @@ loaded <- load_and_prepare_data(args$otu, args$meta)
 data <- prepare_batch_cohort(loaded, args, covariate_vector)
 otu_raw <- data$otu
 meta <- data$meta
+covariate_vector <- data$covariates   # may now include sample_type_protected and log_depth
+args$depth_summary <- data$depth_summary
+# Patient of each sample, from --patient_column or, with --patient_from_tcga_barcode, the first 12
+# characters of the sample ID (TCGA-XX-XXXX). NULL when neither is given.
+patient_vector <- if (!is.null(args$patient_column) && nzchar(args$patient_column)) {
+  if (!args$patient_column %in% names(loaded$meta)) stop("Declared patient column not found: ", args$patient_column)
+  setNames(trimws(as.character(loaded$meta[rownames(meta), args$patient_column])), rownames(meta))
+} else if (isTRUE(args$patient_from_tcga_barcode)) setNames(substr(rownames(meta), 1, 12), rownames(meta)) else NULL
 
 predictors  <- c(args$batch_column, covariate_vector)
 rhs_formula <- reformulate(predictors)
@@ -765,7 +898,22 @@ param_file <- file.path(corr_dir, "ConQuR_tuned_parameters.txt")
     )
   }
   
-  if (result$success) {
+  result$sample_type_note <- data$sample_type_note
+  result$confounding_note <- data$confounding_note
+  decided_uncorrected <- isTRUE(result$success) && !is.null(result$decision) && grepl("^uncorrected_", result$decision)
+  if (decided_uncorrected) {
+    # Deliberate outcome, not a failure: continue with the input table under an honest name.
+    tables$UNCORRECTED_by_decision <- otu_raw
+    save_table(otu_raw, file.path(corr_dir, "UNCORRECTED_by_decision.tsv"))
+    write_status("in_progress", paste0(result$decision, ": ", result$decision_reason))
+    sink(param_file)
+    cat("Auto-Phase Tune_ConQuR Results\n")
+    cat("==============================\n\n")
+    cat("Decision: ", result$decision, "\n", sep = "")
+    cat("Reason:   ", result$decision_reason, "\n", sep = "")
+    cat("\nThe uncorrected table is used downstream (UNCORRECTED_by_decision.tsv).\n")
+    sink()
+  } else if (result$success) {
     matrix_ok(result$data, counts = TRUE)
     assert_same_matrix_ids(result$data, otu_raw)
     tables$ConQuR_tuned <- result$data
@@ -810,7 +958,7 @@ param_file <- file.path(corr_dir, "ConQuR_tuned_parameters.txt")
     cat("Reason:", ifelse(is.null(result$message), "Unknown error", result$message), "\n")
     cat(strrep("!", 70), "\n\n")
 
-    # Never publish raw counts as ConQuR_tuned.tsv (audit A01): record the failure and stop,
+    # Never publish raw counts as ConQuR_tuned.tsv: record the failure and stop,
     # unless --allow_uncorrected, in which case the raw table is saved under an honest name.
     reason <- ifelse(is.null(result$message), "Unknown error", result$message)
     write_status("failed", reason)
@@ -848,12 +996,24 @@ permsum <- list()
 for (tag in names(tables)){
   mat <- tables[[tag]]
 
-  generate_conqur_plots(mat, meta, args$batch_column,
-                        tag, file.path(plot_dir, tag))
+  # A plot is supporting output: if PCoA cannot be drawn (e.g. no positive eigenvalue when all
+  # distances are zero), record why and keep the decision and evaluation records (2026-11-17).
+  plot_error <- tryCatch({
+    generate_conqur_plots(mat, meta, args$batch_column, tag, file.path(plot_dir, tag)); NULL
+  }, error = function(e) conditionMessage(e))
+  if (!is.null(plot_error)) {
+    writeLines(paste("PCoA plot skipped:", plot_error), file.path(plot_dir, paste0(tag, "_PLOT_SKIPPED.txt")))
+    cat("WARN: PCoA plot skipped for", tag, ":", plot_error, "\n")
+  }
 
+  pp <- patient_restricted_p(mat, meta, rhs_formula, "bray", FALSE, patient_vector)
   permsum[[length(permsum)+1]] <- run_permanova(
         mat, meta, rhs_formula, "bray") %>%
-        mutate(Source = tag, Transform = "counts")
+        mutate(Source = tag, Transform = "counts",
+               p_within_patient = if (!is.null(pp$p)) unname(pp$p[Term]) else NA_real_,
+               Patients = if (is.null(pp$n_patients)) NA_integer_ else pp$n_patients,
+               Patients_multi = if (is.null(pp$n_multi)) NA_integer_ else pp$n_multi,
+               Patient_note = if (is.null(pp)) "no patient column declared" else pp$note)
 
   norm_res <- normalize_all(mat,
         file.path(norm_dir, paste0(basename(args$prefix),"_",tag)))
@@ -872,9 +1032,21 @@ for (tag in names(tables)){
 }
 
 bind_rows(permsum) %>% save_table(sum_path)
+# Dispersion check: PERMANOVA R2 can reflect a difference in spread between groups rather
+# than in location. betadisper on the same Bray distances, per table, for the batch and (when protected) the
+# sample type; a failure is recorded, not fatal.
+write.table(dispersion_check(tables, meta, intersect(c(args$batch_column, "sample_type_protected"), names(meta))),
+            file.path(dirname(args$prefix), "batch_correction_dispersion.tsv"), sep = "\t", quote = FALSE, row.names = FALSE, na = "NA")
+write_effect_sizes(tables, meta, args$type_column, trimws(unlist(strsplit(args$tumor_value, ","))),
+                   file.path(dirname(args$prefix), "batch_correction_effect_sizes.tsv"))
+if (!is.null(args$effect_column) && nzchar(args$effect_column))
+  write_named_effect_sizes(tables, meta, args$effect_column, covariate_vector, args$type_column,
+                           file.path(dirname(args$prefix), "batch_correction_effect_sizes.tsv"))
 write_batch_records(result, otu_raw, predictors, args)
 if ("ConQuR_tuned" %in% names(tables))
   write_status("corrected", "ConQuR and all required normalization/evaluation outputs completed")
+if ("UNCORRECTED_by_decision" %in% names(tables))
+  write_status(result$decision, result$decision_reason)
 
 cat("\n", strrep("=", 70), "\n")
 cat("PIPELINE COMPLETED\n")
