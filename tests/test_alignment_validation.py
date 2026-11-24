@@ -84,6 +84,18 @@ class Scorer(unittest.TestCase):
         grouped = self.run_score("--groups", f"{self.d}/groups.tsv")
         self.assertEqual(grouped["EscShi"]["support_to_bracken_ratio"], "0.3000")   # 60 / (100 + 100)
 
+    def test_low_support_flag_marks_but_never_changes_a_status(self):
+        """Review #3: a big Bracken estimate with few alignments is FLAGGED, and nothing else changes.
+        This fixture's estimates are 100 per taxon (below the 1,000 default), so nothing is flagged by
+        default; a threshold that flags everything must leave every status and count identical."""
+        base = self.run_score()
+        self.assertTrue(all(r["low_support_flag"] == "no" for r in base.values()))
+        flagged = self.run_score("--low_support_min_estimate", "1", "--low_support_ratio", "1000")
+        self.assertTrue(all(r["low_support_flag"] == "yes" for r in flagged.values()))
+        for taxon, row in base.items():
+            for col in ("status", "fail_reason", "supporting_reads", "unique_reads", "bracken_reads"):
+                self.assertEqual(flagged[taxon][col], row[col], f"{taxon} {col} changed by the flag")
+
     def test_group_scores_members_as_one_taxon(self):
         rows = self.run_score("--groups", f"{self.d}/groups.tsv")
         self.assertIn("EscShi", rows)
@@ -521,3 +533,30 @@ class ManifestRebuild(unittest.TestCase):
                            "--from_manifest", str(manifest))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("exactly one of --species or --from_manifest", r.stderr)
+
+
+class LowSupportFlag(unittest.TestCase):
+    """Review #3 acceptance: "a 10,000-read Bracken call with ~20 relevant alignments cannot silently
+    remain indistinguishable from a well-supported call". Defaults: estimate >= 1000, ratio < 0.01."""
+
+    def setUp(self):
+        sys.path.insert(0, str(S))
+        import validation_score
+        self.flag = validation_score.low_support_flag
+
+    def test_big_estimate_with_few_alignments_is_flagged(self):
+        self.assertEqual(self.flag(10000, 20), "yes")
+
+    def test_big_estimate_that_aligns_is_not_flagged(self):
+        self.assertEqual(self.flag(10000, 5000), "no")
+
+    def test_small_estimate_is_not_flagged(self):
+        self.assertEqual(self.flag(500, 2), "no")
+
+    def test_zero_estimate_is_na(self):
+        self.assertEqual(self.flag(0, 0), "NA")
+
+    def test_boundaries(self):
+        self.assertEqual(self.flag(1000, 9), "yes")     # at the estimate floor, ratio 0.009
+        self.assertEqual(self.flag(1000, 10), "no")     # ratio exactly 0.01 is not below it
+        self.assertEqual(self.flag(999, 0), "no")       # just below the estimate floor
