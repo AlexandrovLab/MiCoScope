@@ -47,7 +47,7 @@ Not yet released; these are the changes since the last tagged state of `main`.
   genome", which for a microbial read is expected — but nobody knew the numbers. extractReads now tallies,
   in the same single decode pass (flagstat on the already-teed streams), duplicate (0x400), QC-failed
   (0x200) and both, over the library's primary records and over the extracted reads; the QC summary gains
-  six counts and six percentages (85 columns). FASTQ input reads NA. The counts support a later decision
+  six counts and six percentages (85 fields at that point). FASTQ input reads NA. The counts support a later decision
   on exclusion experiments; nothing is excluded now.
 
 - **QC separates Bracken's directly assigned reads from redistributed counts (review #18).** The merged

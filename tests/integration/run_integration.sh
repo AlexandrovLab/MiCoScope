@@ -50,11 +50,11 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
 
     common=(-c "$HERE/integration.config" -ansi-log false
             --control_role surrogate_biological --positive_values Tumor --control_values Blood
-            --taxonomic_rank genus --run_decontam true)
+            --run_decontam true)
 
     echo "INFO  run A (full pipeline) ..."
     ( cd "$FX/runA" && "$NEXTFLOW" run "$REPO/main.nf" "${common[@]}" \
-        --sample "$F/samplesheet.csv" --outdir "$FX/runA/results" \
+        --taxonomic_rank species --sample "$F/samplesheet.csv" --outdir "$FX/runA/results" \
         --hg38_db "$F/db/hg38.mmi" --t2t_phix_db "$F/db/t2t_phix.mmi" \
         --kraken_db "$F/db/kraken" --metaphlan_db "$F/db/metaphlan" \
         --metadata_file "$F/metadata_runA.tsv" --min_total_per_batch 2 \
@@ -65,7 +65,7 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
     BC=on
     echo "INFO  run B (--start_from decontam, batch correction $BC) ..."
     ( cd "$FX/runB" && "$NEXTFLOW" run "$REPO/main.nf" "${common[@]}" \
-        --start_from decontam --outdir "$FX/runB/results" \
+        --start_from decontam --taxonomic_rank genus --outdir "$FX/runB/results" \
         --consensus_otu_table "$F/decontam/genus_table.tsv" \
         --decontam_library_sizes "$F/decontam/library_sizes.tsv" \
         --metadata_file "$F/decontam/metadata.tsv" \
@@ -79,7 +79,7 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
     if [[ $BC == on ]]; then
         echo "INFO  run C (--start_from decontam + batch correction on 28 samples) ..."
         ( cd "$FX/runC" && "$NEXTFLOW" run "$REPO/main.nf" "${common[@]}" \
-            --start_from decontam --outdir "$FX/runC/results" \
+            --start_from decontam --taxonomic_rank genus --outdir "$FX/runC/results" \
             --consensus_otu_table "$F/batch/genus_table.tsv" \
             --decontam_library_sizes "$F/batch/library_sizes.tsv" \
             --metadata_file "$F/batch/metadata.tsv" --run_batch_correction true \
@@ -90,7 +90,7 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
     # run D (audit C04): a covariate missing from the metadata must stop at LAUNCH, before any task.
     echo "INFO  run D (missing covariate, expect a launch-time stop) ..."
     ( cd "$FX/runD" && "$NEXTFLOW" run "$REPO/main.nf" "${common[@]}" \
-        --start_from decontam --outdir "$FX/runD/results" \
+        --start_from decontam --taxonomic_rank genus --outdir "$FX/runD/results" \
         --consensus_otu_table "$F/batch/genus_table.tsv" \
         --decontam_library_sizes "$F/batch/library_sizes.tsv" \
         --metadata_file "$F/batch/metadata_nocov.tsv" --run_batch_correction true \

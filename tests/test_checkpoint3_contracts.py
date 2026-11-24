@@ -144,12 +144,13 @@ class CountAndMask(unittest.TestCase):
         self.assertEqual(status["species_without_genus_dropped"], "2")
         self.assertEqual(status["species_rows_out"], "1")
 
-    def test_genus_rollup_with_no_genus_at_all_fails(self):
+    def test_genus_rollup_with_no_genus_preserves_empty_table_and_reason(self):
         table = self.write("decontam.csv", "clade_name,X\ns__synthetic_construct,5\n")
         r = self.run_script("aggregate_decontaminated_species.py", "--input", table, "--output", "genus.csv",
                             "--excluded", "excluded.tsv")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("genus table would be empty", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(read_counts(self.d / "genus.csv", "g", delimiter=","), (["X"], {}))
+        self.assertIn("no genus in lineage", (self.d / "excluded.tsv").read_text())
 
     def gate_shell(self):
         """The rendered gate block, pointed at the REPO's real scope file (review #14)."""

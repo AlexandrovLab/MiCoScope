@@ -16,7 +16,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+NONMICROBIAL = {"homo sapiens", "sinsheimervirus phix174", "synthetic construct"}   # taxids 9606, 10847, 32630
+
+
 class ZeroTotalWiring(unittest.TestCase):
+    def test_nonmicrobial_taxa_removed_by_default(self):
+        """Decontam route: a default run removes human, PhiX and synthetic construct before decontam."""
+        text = (ROOT / "main.nf").read_text()
+        default = text.split('params.decontam_remove_taxa = "', 1)[1].split('"', 1)[0]
+        self.assertEqual({x.strip().lower() for x in default.split(";")}, NONMICROBIAL)
+        self.assertIn('--remove_taxa "${params.decontam_remove_taxa}"', (ROOT / "Modules" / "decontamination.nf").read_text())
+
     def test_policy_parameter_defaults_to_keep_and_is_validated(self):
         text = (ROOT / "main.nf").read_text()
         self.assertIn('params.decontam_zero_total_policy = "keep"', text)
@@ -183,6 +193,25 @@ class ZeroTotalBehaviour(unittest.TestCase):
             summary = f.read()
         self.assertIn("Removed before decontam (--remove_taxa): d__X|g__Homo|s__Homo_sapiens", summary)
 
+    def test_nonmicrobial_taxa_absent_from_decontaminated_table(self):
+        """With the main.nf default list, the decontaminated table (the scientific matrix) has none of them."""
+        names = ["Homo_sapiens", "Sinsheimervirus phiX174", "synthetic_construct", "Bacteroides_fragilis",
+                 "Escherichia_coli", "Ralstonia pickettii"]
+        with open(f"{self.dir}/otu.tsv") as f:
+            text = f.read()
+        for j, n in enumerate(names):
+            text = text.replace(f"g__G{j}\t", f"d__X|g__{n.replace(' ', '_').split('_')[0]}|s__{n}\t")
+        with open(f"{self.dir}/otu.tsv", "w") as f:
+            f.write(text)
+        default = (ROOT / "main.nf").read_text().split('params.decontam_remove_taxa = "', 1)[1].split('"', 1)[0]
+        r = self.run_r("--remove_taxa", default, rank="species")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        with open(f"{self.dir}/t.decontam_pkg_decontaminated.csv") as f:
+            kept = {row[0] for row in csv.reader(f)} - {"clade_name"}
+        last = lambda t: t.rsplit("s__", 1)[-1].replace("_", " ").lower()
+        self.assertTrue(kept)
+        self.assertFalse({last(t) for t in kept} & NONMICROBIAL, kept)
+
     def test_human_genus_removed_at_genus_rank(self):
         with open(f"{self.dir}/otu.tsv") as f:
             text = f.read().replace("g__G0\t", "d__X|g__Homo\t")
@@ -207,7 +236,7 @@ class ZeroTotalBehaviour(unittest.TestCase):
         self.assertIn("Eligible batches: 2", summary)
 
     def test_near_empty_library_is_not_evidence_of_absence(self):
-        """A06: a 3-read library can't show presence; below --min_library it's excluded."""
+        """A 3-read library can't show presence; below --min_library it's excluded."""
         r = self.run_r("--library_table", "lib_shallow.tsv")
         self.assertEqual(r.returncode, 0, r.stderr[-500:])
         rows = [l.rstrip("\n").split("\t") for l in open(f"{self.dir}/t.sample_validation.tsv")]
@@ -215,7 +244,7 @@ class ZeroTotalBehaviour(unittest.TestCase):
         self.assertEqual(s5[rows[0].index("reason")], "insufficient_library")
 
     def test_all_zero_after_abundance_filter_gets_the_library_check(self):
-        """Decision 24 (A06): a tiny library whose reads all fall below --min_abundance is all-zero
+        """A tiny library whose reads all fall below --min_abundance is all-zero
         in what the prevalence test sees, so it must face --min_library too."""
         rows = [l.rstrip("\n").split("\t") for l in open(f"{self.dir}/otu.tsv")]
         col = rows[0].index("S10")                           # a batch-2 control
@@ -234,7 +263,7 @@ class ZeroTotalBehaviour(unittest.TestCase):
         self.assertEqual(s10[out[0].index("reason")], "insufficient_library")
 
     def test_unknown_library_stops_unless_allowed(self):
-        """A07: a zero-total sample with no library size must not be silently kept."""
+        """A zero-total sample with no library size must not be silently kept."""
         r = self.run_r("--no_lib")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("have no library size", r.stderr)
@@ -247,7 +276,7 @@ class ZeroTotalBehaviour(unittest.TestCase):
         self.assertIn("raw taxon tables are not library sizes", r.stderr)
 
     def test_contaminants_final_says_whether_a_taxon_was_callable(self):
-        """A19: n_evaluable_batches and callable columns."""
+        """n_evaluable_batches and callable columns."""
         r = self.run_r()
         self.assertEqual(r.returncode, 0, r.stderr[-500:])
         head = open(f"{self.dir}/t.contaminants_final.tsv").readline().rstrip("\n").split("\t")

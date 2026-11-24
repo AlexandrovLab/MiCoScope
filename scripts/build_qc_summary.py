@@ -91,6 +91,7 @@ COLUMNS = [
     "shared_genera", "shared_species",
     # decontamination
     "decontam_sample_type", "decontam_role", "decontam_final_status",
+    "decontam_result_status", "decontam_result_reason", "genus_rollup_status",
     # batch correction, per corrected rank: included, or excluded: <reason>
     "batch_species_status", "batch_genus_status",
     # what happened to the sample, in one word (audit C13/C02/C10): no_outputs (in the sample sheet
@@ -234,6 +235,8 @@ def terminal_state(row: dict, stages: list[str], input_type: str | None, humann_
     if _known(decontam) and decontam != "included":
         reason = re.sub(r"[^a-z0-9]+", "_", (row.get("_decontam_reason") or decontam).lower()).strip("_")
         return f"excluded_decontam_{reason or 'unspecified'}"
+    if row.get("decontam_result_status") == "valid_empty":
+        return "completed_valid_empty_decontamination"
     if row.get("bracken_status") == "called":
         return "completed_profiled"
     if row.get("bracken_status") == "no_call":
@@ -623,6 +626,8 @@ def parse_sample_validation(path: Path) -> dict[str, dict]:
                 "decontam_sample_type": record.get("sample_type") or NA,
                 "decontam_role": record.get("role") or NA,
                 "decontam_final_status": record.get("final_status") or NA,
+                "decontam_result_status": record.get("result_status") or NA,
+                "decontam_result_reason": record.get("result_reason") or NA,
                 # Why an excluded sample was excluded (metadata_only, insufficient_library, ...);
                 # used for terminal_state only, not a column.
                 "_decontam_reason": record.get("reason") or "",
@@ -781,6 +786,20 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
                 decontam_output.add(sample)
             if sample in rows or in_table:
                 row_for(sample).update(roles)
+
+    for path in sorted(inputs.rglob("*.genus_rollup_status.tsv")):
+        seen = set()
+        with path.open() as handle:
+            for record in csv.DictReader(handle, delimiter="\t"):
+                sample, status, reason = (record.get(k, "") for k in ("sample", "status", "reason"))
+                if not sample or sample in seen or status not in ("completed", "valid_empty", "not_applicable") or not reason:
+                    raise ValueError(f"{path.name}: invalid or duplicate genus roll-up status")
+                if row_for(sample).get("genus_rollup_status") not in (None, NA):
+                    raise ValueError(f"{path.name}: repeated genus roll-up sample {sample}")
+                seen.add(sample)
+                row_for(sample)["genus_rollup_status"] = f"{status}: {reason}"
+        if decontam_output is not None and seen != decontam_output:
+            raise ValueError(f"{path.name}: genus roll-up samples do not match decontamination output")
 
     ledgers = {}
     for path in sorted(inputs.rglob("*.batch_sample_status.tsv")):
