@@ -1,4 +1,4 @@
-"""ANI curation of the validation reference (decision 36; ANI check of 6 Oct 2026, decided 26 Oct 2026).
+"""ANI curation of the validation reference.
 
 RefSeq species labels are not always right. In the CRC50 reference, 4 genomes filed as
 Fusobacterium nucleatum are F. animalis or F. vincentii (97-98% median ANI to those species,

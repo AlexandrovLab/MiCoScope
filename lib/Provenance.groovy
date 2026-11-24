@@ -7,12 +7,12 @@ import java.security.MessageDigest
  * Fingerprints for the things a task depends on but does not declare: helper scripts,
  * reference indexes, annotation files and databases.
  *
- * F15. Nextflow hashes a task from its declared inputs and its rendered script. A
+ * Nextflow hashes a task from its declared inputs and its rendered script. A
  * reference or helper referenced only as a path string inside the script is neither,
  * so rebuilding an index in place, or editing a helper, leaves every hash unchanged
  * and `-resume` reuses tasks that no longer correspond to the current code. These digests
  * reach each process as a `val deps` input, which IS part of the task hash (embedding
- * them in the script text is not: verified 2026-09-23, audit C03).
+ * them in the script text is not: verified 2026-09-23).
  *
  * Two modes, because the inputs differ by orders of magnitude:
  *
@@ -20,7 +20,7 @@ import java.security.MessageDigest
  *              files, under half a megabyte -- an edit must invalidate, and nothing
  *              else will catch it.
  *   data(...)  relative path, size and modification time of every entry down to three
- *              levels (audit C03: a file rebuilt inside a database subdirectory, such
+ *              levels (a file rebuilt inside a database subdirectory, such
  *              as the HUMAnN ChocoPhlAn/UniRef trees or a pangenome .mmi found by a
  *              recursive `find`, left the top level unchanged). Content is never read:
  *              an 8.6 GB index cannot be hashed on every launch. A rebuilt file changes
@@ -43,10 +43,10 @@ class Provenance {
      * this digest, so a -resume after executing one script re-ran the entire cohort. At
      * 2,054 samples that is hours of compute for a byproduct. It also made the digest
      * non-reproducible across machines -- different interpreter versions or optimisation
-     * levels write different .pyc -- which undermines the equivalence record F16 exists
+     * levels write different .pyc -- which undermines the equivalence record exists
      * to provide.
      *
-     * F15 asks that a changed reference or helper script invalidate the cache. A .pyc is
+     * A changed reference or helper script invalidate the cache. A .pyc is
      * neither. Observed 2026-09-22: one regenerated .pyc cost a full cache miss.
      */
     private static boolean generated(File f) {
@@ -96,7 +96,7 @@ class Provenance {
 
     /**
      * Full SHA-256 of one small file's content: the sample sheet and metadata table
-     * (audit C06). name/size/mtime is not enough for these -- editing one row of a sheet
+     *. name/size/mtime is not enough for these -- editing one row of a sheet
      * can keep the size, and copying it resets the mtime. Only the digest is returned;
      * a file above `maxBytes` falls back to data(), which never reads content.
      */
@@ -115,7 +115,7 @@ class Provenance {
     }
 
     /**
-     * The conda env specs: conda_envs/*.yml and conda_envs/lock/*, by content (audit D08).
+     * The conda env specs: conda_envs/*.yml and conda_envs/lock/*, by content.
      * Deliberately not code(conda_envs/): that would also hash the build logs and the
      * unused/ ymls, so a new build log would read as a changed environment.
      */

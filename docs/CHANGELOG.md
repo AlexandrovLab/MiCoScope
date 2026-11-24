@@ -2,6 +2,16 @@
 
 Not yet released; these are the changes since the last tagged state of `main`.
 
+- **Code clean-up for release (reviews #30-#32); no run changes.** Internal audit, decision and plan
+  tags are gone from the pipeline code, modules, scripts and lib comments (the rationale stays; the history
+  is in this changelog). Personal paths and usernames are gone from scripts and tests: the one-time setup
+  jobs take `CMP_OUT_DIR` / `CMP_RUN_DIR`, the env build takes `CONDA_BASE` / `CMP_ENV_STAGE`, and
+  `main.sbatch` finds conda itself. `conf/tscc.config` stays the TSCC site profile. Comments that pointed
+  at documents outside the repository now point at `docs/`. The September checkpoint run scripts
+  (`tests/integration/run_checkpoint*.sbatch`), their fixture, change lists and notes are removed:
+  `tests/integration/run_integration.sh` replaced them. Comments inside process scripts changed, so a
+  `-resume` across this commit re-runs those tasks.
+
 - **MAG and antiSMASH modules removed (review #35).** `Modules/antismash.nf`, `Modules/run_antismash.nf`,
   `conf/mag.config`, `conf/antismash.config`, `conda_envs/antismash_env.yml`, the nf-core/mag helper jobs
   (`run_mag`, `download_gtdb_checkm2`, `repair_pairs`, `repair_pairs_large`, `run_antismash`) and

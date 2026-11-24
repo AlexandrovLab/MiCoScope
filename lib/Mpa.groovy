@@ -1,5 +1,5 @@
 /**
- * Which MetaPhlAn database, index and environment this launch uses (review #15, Nov 2026).
+ * Which MetaPhlAn database, index and environment this launch uses.
  *
  * The default is the newest database the site configures (--metaphlan_db; vJan26 on TSCC),
  * run with MetaPhlAn 4.2. HUMAnN 3.9 refuses profiles from databases newer than vJun23

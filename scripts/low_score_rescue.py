@@ -20,7 +20,7 @@ Two subcommands, both counts/metadata only (no sequence is read or written):
             never written: command lines carry paths and sample names.
             With --provenance FILE it also writes the input provenance row from the SAME header
             text (scripts/header_provenance.py: @SQ fingerprint, contig classes, @PG chain,
-            reduced bwa options, upstream unmapped filters; audit X13), so the header is read
+            reduced bwa options, upstream unmapped filters), so the header is read
             from the alignment once.
 
   survival  Counts how many of the rescued read names (the ID list extractReads writes, names

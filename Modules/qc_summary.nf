@@ -25,11 +25,11 @@ process qcSummary {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path("cmp.qc.summary.tsv"), emit: summary
-    // Per sample x taxon: Bracken assigned / added / estimated counts (review #18). Reporting
+    // Per sample x taxon: Bracken assigned / added / estimated counts. Reporting
     // only; header-only when no Bracken report was staged (e.g. --start_from decontam).
     path("bracken_count_components.tsv"), emit: components
 

@@ -9,8 +9,8 @@ from count_tables import read_counts
 # Argument parser
 parser = argparse.ArgumentParser(
     description="Compute consensus microbial taxa from MetaPhlAn and Bracken outputs, learning from the "
-                "samples MetaPhlAn ran on (those that cleared the KrakenUniq root-count gate upstream; "
-                "decision 18), and generate a visualization."
+                "samples MetaPhlAn ran on (those that cleared the microbial-read "
+                "gate upstream), and generate a visualization."
 )
 
 parser.add_argument("--metaphlan", default=None,
@@ -104,7 +104,7 @@ pd.DataFrame({
 # Consensus learns from exactly the samples MetaPhlAn ran on. The Bracken module already gated
 # them on --consensus_min_reads using the KrakenUniq ROOT count; re-thresholding here on Bracken
 # genus totals (a different number) could drop a gated sample and even flip the run to
-# pass-through (audit A05; decided 2026-09-23). samples_above_threshold is reported, not used.
+# pass-through. samples_above_threshold is reported, not used.
 common_samples = sorted(set(metaphlan_sample_cols) & set(bracken_sample_cols))
 print(f"Common samples for consensus: {len(common_samples)}")
 

@@ -57,7 +57,7 @@ def main():
     #Parse arguments
     parser = argparse.ArgumentParser()
     # CMPipeline: --input-list reads paths from a file, one per line, so a cohort merge needs one
-    # argument instead of one per sample (ARG_MAX at ~33k samples; audit C15, 2026-09-23).
+    # argument instead of one per sample (ARG_MAX at ~33k samples, 2026-09-23).
     parser.add_argument('--input-list', dest='in_list', default=None,
         help='File listing input paths, one per line (instead of --input)')
     parser.add_argument('-i', '--input', required=False, default=[],

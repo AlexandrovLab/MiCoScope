@@ -16,7 +16,7 @@ def label_of(species_name):
 
     Idempotent on already-underscored names. Bracken tables made by kreport2mpa.py replace
     spaces with underscores ('s__Escherichia_coli') while taxDB and RefSeq use spaces, so every
-    comparison between the two MUST go through this function (audit B01, 2026-09-23)."""
+    comparison between the two MUST go through this function."""
     return re.sub(r"[\s_]+", "_", species_name.strip())
 
 

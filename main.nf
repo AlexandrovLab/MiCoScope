@@ -13,15 +13,15 @@ params.run_decontam = true           // Enable decontamination step
 params.run_batch_correction = false   // disable batch correction step
 params.skip_multiqc = false          // Cohort QC report from fastp JSON + FastQC
 params.skip_cohort_report = false    // Self-contained HTML cohort report
-// finish | ignore: what a per-sample failure does to the run (audit C10). finish (default) stops it;
+// finish | ignore: what a per-sample failure does to the run. finish (default) stops it;
 // ignore lets the other samples complete, with the failures listed in the run report.
 params.sample_failure_strategy = 'finish'
-// strict | warn: every task records the version and path of each tool it runs (audit K06/K07;
-// lib/ToolVersions.groovy). strict (default) stops the run (exit 78 -> terminate) when a tool resolves
+// strict | warn: every task records the version and path of each tool it runs
+// (lib/ToolVersions.groovy). strict (default) stops the run (exit 78 -> terminate) when a tool resolves
 // outside the task's conda env or differs from its lockfile pin; warn records it in RUN_REPORT and
 // carries on. Results from a warn run with a mismatch were NOT produced by the pinned tools.
 params.tool_version_check = 'strict'
-params.save_intermediates = false   // publish intermediate read files too (default: host-depleted reads only; audit C11)
+params.save_intermediates = false   // publish intermediate read files too (default: host-depleted reads only)
 
 // Entry point for resuming workflow
 params.start_from = 'beginning'  // Options: 'beginning', 'decontam', 'batch_correction'
@@ -40,7 +40,7 @@ params.decontam_threshold = 0.1
 // in >=5% of samples") and June-young's ver4 default. The pipeline had carried 0.02 since
 // the committed base, which was the odd one out: --decontam_min_abundance (5) and
 // --decontam_threshold (0.1) already matched the published methods.
-// Adopted 2026-09-22 (Ammal). See MERGE_CHECKLIST 3.1.
+// Adopted 2026-09-22 (Ammal).
 params.decontam_min_prevalence = 0.05
 params.decontam_min_abundance = 5
 params.decontam_min_batches = 2
@@ -59,9 +59,9 @@ params.decontam_library_sizes = null   // for --start_from decontam: bracken_lib
 // error: stop (ver4 behaviour). Decided 2026-09-23 (Ammal), after the balanced CRC run hit it.
 params.decontam_unevaluable_policy = "skip"
 // Minimum Bracken library for an all-zero sample to count as evidence of absence; below it the
-// sample is excluded as insufficient_library (audit A06/A18; decided 2026-09-23, Ammal: 1000).
+// sample is excluded as insufficient_library.
 params.decontam_min_library = 1000
-// A zero-total sample with unknown library size stops decontam unless this is set (audit A07).
+// A zero-total sample with unknown library size stops decontam unless this is set.
 params.decontam_allow_unknown_library = false
 // Per-batch eligibility floors (ver4).
 params.min_total_per_batch = 5
@@ -71,13 +71,13 @@ params.batch_column = "shipment_batch"
 // Batch correction only, and only when --tumor_only is set: which sample types count as
 // tumours for that subsetting. NOT the same question as decontamination's
 // --positive_values, which means "not a control" and in TCGA includes Solid Tissue Normal.
-// Renamed 2026-09-22 so the two cannot be confused. See MERGE_CHECKLIST 3.2.
+// Renamed 2026-09-22 so the two cannot be confused.
 // Default set below the role parameters: the TCGA preset names its tumours "Primary Tumor".
-// A failed batch correction stops the run (audit A01). true = continue with the raw counts,
+// A failed batch correction stops the run. true = continue with the raw counts,
 // published as corrected/UNCORRECTED_passthrough.tsv, never as ConQuR_tuned.tsv.
 params.batch_corr_allow_uncorrected = false
 // The ConQuR commit the batch-correction script was written against (ivartb/ConQuR_par fork);
-// the module refuses any other install (audit A14).
+// the module refuses any other install.
 params.conqur_sha = "ff233085cedc36a24382038067a4cece3e94e0a0"
 
 // --- Decontamination sample-role contract (ver4) -----------------------------------
@@ -97,8 +97,8 @@ params.cohort_preset = null
 // only apply when the flag was not passed.
 // The metadata column holding each sample's role. Neutral default, overridable per
 // cohort; --cohort_preset tcga supplies the TCGA column name. A CLI value wins over
-// both (Nextflow keeps the first assignment). Decided 2026-09-22 (Ammal); see
-// MERGE_CHECKLIST 3.3. A column that exists but means something else is caught by
+// both (Nextflow keeps the first assignment). Decided 2026-09-22 (Ammal).
+// A column that exists but means something else is caught by
 // --unselected_type_policy error, since its values would not match the declared
 // --positive_values / --control_values.
 params.type_column = params.cohort_preset == 'tcga' ? 'Sample Type_x' : 'sample_type'
@@ -129,7 +129,7 @@ params.batch_corr_effect_column = null
 // ============================================================================
 
 params.batch_corr_covariates = "age_diag,sex,bmi"  // Metadata columns ConQuR adjusts for. At least one is
-                                                   // required ("none" stops at launch, decision 16), and each
+                                                   // required ("none" stops at launch), and each
                                                    // named column must exist in --metadata_file
 params.tumor_only = false  // have matched tumor/normal, keep both
 params.phase = "auto"
@@ -140,10 +140,10 @@ params.bracken_read_length = 'auto'  // auto: per sample, the kmer_distrib lengt
                                       // one length for every sample (the old default was a fixed 50).
 // Bracken -t: the minimum reads a taxon needs to be re-estimated -- a THRESHOLD, not a thread
 // count. The committed value was 2; an edit had set it to ${task.cpus}, so abundance output
-// changed with the CPU count and the retry attempt (audit A04, 2026-09-23).
+// changed with the CPU count and the retry attempt.
 params.bracken_threshold = 2
 params.consensus_min_reads = 100000  // Per-sample minimum microbial reads (see --microbial_scope) for MetaPhlAn
-// The taxa that count as microbial (review #14): bacteria, archaea, fungi and a fixed list of
+// The taxa that count as microbial: bacteria, archaea, fungi and a fixed list of
 // protozoan clades -- the validation reference's scope. The gate and the QC summary sum exactly
 // these KrakenUniq clade counts.
 params.microbial_scope = "${projectDir}/conf/microbial_scope_taxids.tsv"
@@ -155,20 +155,20 @@ params.microbial_scope = "${projectDir}/conf/microbial_scope_taxids.tsv"
 params.sample = "${projectDir}/samples.csv"
 params.input_data_type = "auto"  // auto | bam | cram | fastq
 params.cram_reference = null      // optional matching FASTA for CRAM decoding
-// BAM/CRAM only (Ludmil 1 Oct, L8; ported from pksProfiler E1). Also extract PRIMARY mapped records
+// BAM/CRAM only (ported from pksProfiler). Also extract PRIMARY mapped records
 // with AS:i < 30 -- the reads a default `bwa mem` (-T 30) would have left unmapped. GDC aligned TCGA
 // with `bwa mem -T 0`, so FLAG 4 extraction alone misses microbial reads with a chance short human hit.
 // auto = on only when the input's @PG runs bwa mem / bwa-mem2 mem with -T < 30; off for STAR, minimap2,
 // bwa aln, bwa mem at the default -T, or no @PG. Decided and recorded per sample (QC summary).
 params.extract_low_score_mapped = "auto"   // auto | on | off
-// QC floor (pksProfiler COHORT_CHECKS A3; port review #34). A sample is NOT ASSESSABLE -- never a
+// QC floor (ported from pksProfiler). A sample is NOT ASSESSABLE -- never a
 // microbial negative -- when its BAM/CRAM has no FLAG 4 record, when the input's @PG chain shows its
 // unmapped reads were filtered upstream (samtools view -F 4 / -f 2 / -q / a region; sambamba filter),
 // or when fewer than --min_reads_after_depletion reads survive host depletion. QC summary terminal_state
 // not_assessable_<reason>. exclude (default): the sample stops at that point and enters no cohort table;
 // flag: it carries on, and only the QC summary / RUN_REPORT mark it.
 params.qc_floor_action = "exclude"          // exclude | flag
-params.min_reads_after_depletion = 0        // 0 = off. No calibrated value exists yet (review #34/#44)
+params.min_reads_after_depletion = 0        // 0 = off. No calibrated value exists yet
 
 // Output directories. Everything publishes under --outdir, which defaults to RESULTS/ in
 // the directory the run was launched from, next to that run's work/ and pipeline_info/.
@@ -196,16 +196,16 @@ params.batch_corr_dir = "${params.outdir}/05_BATCH_CORRECTION"
 params.validation_dir = "${params.outdir}/06_VALIDATION"
 
 // ============================================================================
-// ALIGNMENT VALIDATION (opt-in). Design: DESIGN_alignment_validation.md (v2, 2026-09-23).
-// Thresholds are the simulation benchmark's (alignment_benchmark/RESULTS.md); identity is the
+// ALIGNMENT VALIDATION (opt-in). Design and thresholds: docs/running/alignment_validation.md.
+// Thresholds come from a simulation benchmark on public genomes; identity is the
 // least certain and should be revisited after the first real run.
 // ============================================================================
 params.run_alignment_validation = false
 params.validation_min_support = 25        // reads on the best genome; below this: insufficient
-params.validation_min_confirmed = 10      // Bracken >= min_support but < this many supporting reads: unsupported, zeroed (decision 29)
+params.validation_min_confirmed = 10      // Bracken >= min_support but < this many supporting reads: unsupported, zeroed
 params.validation_min_bins_ratio = 0.5    // 10 kb windows hit / expected (per read pair)
 params.validation_min_identity = 0.98     // median 1 - NM/aligned columns
-params.validation_min_unique_frac = 0.05  // unique / (unique + shared) reads; 0.02 until 2026-09-30 (audit V01/V02)
+params.validation_min_unique_frac = 0.05  // unique / (unique + shared) reads; 0.02 until 2026-09-30
 params.validation_bins_reads = 'unique'   // reads the bins test uses: unique (default) | all (2026-09-23 rule)
 params.validation_minimap_n = 100         // minimap2 -N: alternative alignments kept per read; the #16/#17 sweep varies it (100/200/500)
 params.validation_max_genomes = 50        // RefSeq genomes per species, before de-duplication
@@ -215,7 +215,7 @@ params.validation_relabel_margin = 1.0    // ...and by how much ANI its new spec
 params.validation_group_ani = 92          // species whose anchors meet at this ANI form one fallback group (0 = off)
 params.validation_group_rescue_shared = false  // also rescue unique_fraction failures (shadows) at group level
 params.validation_max_missing_frac = 0.10 // fail if more species than this get no genome
-params.validation_max_ref_gb = 40         // refuse a planned reference above this many Gb, before downloading (audit B05)
+params.validation_max_ref_gb = 40         // refuse a planned reference above this many Gb, before downloading
 params.validation_batch_size = 20         // samples per alignment task (index loads once each)
 params.validation_groups = "${projectDir}/ref/validation_groups.tsv"   // E. coli + Shigella
 params.validation_export_reads = false    // write reads supporting validated taxa (protected data)
@@ -235,7 +235,7 @@ params.validation_refseq_snapshot = null
 params.hg38_db=null       // Set in a site profile or with --hg38_db
 params.t2t_phix_db=null    // Set in a site profile or with --t2t_phix_db
 params.pangenome_db=null  // optional .mmi file or directory containing .mmi files
-params.host_depletion_frag = 'no'   // no (default, 2026-10-06) | auto: minimap2 -ax sr pairs ADJACENT mates (fragment mode); 'no' makes depletion independent of input route/record order (Ludmil E0, decision 37)
+params.host_depletion_frag = 'no'   // no (default, 2026-10-06) | auto: minimap2 -ax sr pairs ADJACENT mates (fragment mode); 'no' makes depletion independent of input route/record order
 params.kraken_db=null     // Set in a site profile or with --kraken_db
 // MetaPhlAn database: the newest the site configures (vJan26 on TSCC) is the default. HUMAnN 3.9
 // reads only vJun23-era profiles, so --skip_humann3 false switches to --metaphlan_db_vjun23 (lib/Mpa.groovy).
@@ -247,7 +247,7 @@ params.humann3_protein_db=null     // Set in a site profile or with --humann3_pr
 params.adapters="${projectDir}/ref/known_adapters.fna"
 params.adapters_core="${projectDir}/ref/illumina_core_adapters.fna"  // 5 Illumina sequences: the default for every sample
 params.adapter_trim="auto"  // auto | always | never -- see the adapter_trim note in the workflow below
-// Extra fastp flags, space-separated; default none (review #13 experiment arms, e.g.
+// Extra fastp flags, space-separated; default none (e.g.
 // '--trim_poly_g --poly_g_min_len 10' or '--low_complexity_filter --complexity_threshold 30').
 // Experiments only: nothing becomes a default without the comparison.
 params.fastp_extra = ""
@@ -256,9 +256,9 @@ params.fastp_extra = ""
 // CONDA ENVIRONMENT PATHS
 // ============================================================================
 
-// Exact, locked environments (`conda list --explicit`), one per module (audit D01/D02, decision 23).
+// Exact, locked environments (`conda list --explicit`), one per module.
 // The .yml beside each lockfile is its human-readable source; conda_envs/build_envs.sbatch
-// regenerates the lockfiles. No `defaults` channel anywhere (audit D07).
+// regenerates the lockfiles. No `defaults` channel anywhere.
 params.samtools_env = "${projectDir}/conda_envs/lock/samtools_env.linux-64.txt"
 params.fastp_env = "${projectDir}/conda_envs/lock/fastp_env.linux-64.txt"
 params.fastqc_env = "${projectDir}/conda_envs/lock/fastqc_env.linux-64.txt"
@@ -267,7 +267,7 @@ params.multiqc_env = "${projectDir}/conda_envs/lock/multiqc_env.linux-64.txt"
 params.krakenuniq_bracken_env = "${projectDir}/conda_envs/lock/krakenUniq_bracken_env.linux-64.txt"
 params.consensus_taxa_env = "${projectDir}/conda_envs/lock/consensus_taxa_env.linux-64.txt"
 // auto: MetaPhlAn 4.1.1 for vJun23-era indexes, 4.2.6 for newer (vJan26 needs 4.2). An explicit
-// --metaphlan4_env is used as given. Adopted 23 Nov 2026 after the 10-sample comparison (review #15).
+// --metaphlan4_env is used as given. Adopted 23 Nov 2026 after the 10-sample comparison.
 params.metaphlan4_env = "auto"
 params.metaphlan41_env = "${projectDir}/conda_envs/lock/metaphlan4_env.linux-64.txt"
 params.metaphlan42_env = "${projectDir}/conda_envs/lock/metaphlan42_env.linux-64.txt"
@@ -335,7 +335,7 @@ def pathParam(String name, value) {
     return resolved
 }
 
-// Dependency digest for a process's `val deps` input (audit C03). Nextflow hashes a task's
+// Dependency digest for a process's `val deps` input. Nextflow hashes a task's
 // unrendered script and the VALUES of params it references, but not the contents behind a path
 // string, so without this an edited helper script or a rebuilt database was served stale on
 // -resume. code: content SHA-256 (small files); data: name+size+mtime (databases, indexes).
@@ -394,7 +394,7 @@ def boolParam(String name, value) {
     def s = value.toString().trim()
     // Only true/false, lower case. Modules re-read some flags as `params.x.toString() == 'true'`, so
     // accepting yes/on/1 -- or TRUE -- here made those flags look on at validation but stay OFF in
-    // the module (audit C19).
+    // the module.
     if (s == 'true')          return true
     if (s in ['false', ''])   return false
     error "--${name} expects a boolean (true/false) but was given '${value}'"
@@ -403,7 +403,7 @@ def boolParam(String name, value) {
 
 // HUMAnN 3.9 accepts MetaPhlAn profiles only from the v3/vJun23-era databases and refuses
 // anything newer outright ("not generated with the database version v3 or vJun23"; probed
-// with a vJan26 profile, 23 Nov 2026, review #15). When functional profiling is requested
+// with a vJan26 profile, 23 Nov 2026). When functional profiling is requested
 // together with a newer --metaphlan_index, warn at launch and SKIP HUMAnN instead of failing
 // hours in: the user chooses between the newer taxonomy and functional profiles.
 // With --metaphlan_index auto, lib/Mpa.groovy has already switched to the vJun23 database, so
@@ -516,7 +516,7 @@ workflow {
     if (!(params.host_depletion_frag instanceof CharSequence) || !(params.host_depletion_frag.toString() in ['no', 'auto'])) {
         error "--host_depletion_frag must be no or auto (got '${params.host_depletion_frag}')"
     }
-    def qcFloorProblem = QcFloor.problem(params)   // QC floor (review #34; lib/QcFloor.groovy)
+    def qcFloorProblem = QcFloor.problem(params)   // QC floor
     if (qcFloorProblem) error qcFloorProblem
     def qcFloorAction = params.qc_floor_action.toString()
     def minReadsAfterDepletion = params.min_reads_after_depletion.toString().toLong()
@@ -574,7 +574,7 @@ workflow {
     }
 
     // Integer-only: the Bracken gate compares with bash [[ -ge ]], and a value like 1e5 made that
-    // test error out so every sample silently skipped MetaPhlAn (audit A13).
+    // test error out so every sample silently skipped MetaPhlAn.
     ['consensus_min_reads': params.consensus_min_reads, 'bracken_threshold': params.bracken_threshold].each { name, v ->
         if (!v.toString().isInteger() || v.toString().toInteger() < 0)
             error "--${name} must be a non-negative integer (got '${v}')"
@@ -584,9 +584,9 @@ workflow {
         error "--bracken_read_length must be auto or a positive integer (got '${params.bracken_read_length}')"
     if (params.start_from == 'beginning' && !skipClassification) {
         requirePathParam('kraken_db', params.kraken_db, 'for KrakenUniq/Bracken classification')
-        requirePathParam('microbial_scope', params.microbial_scope, 'for the MetaPhlAn gate (review #14)')
+        requirePathParam('microbial_scope', params.microbial_scope, 'for the MetaPhlAn gate')
         requirePathParam('metaphlan_db', params.metaphlan_db, 'for MetaPhlAn 4 classification')
-        // Contents, not just existence (audit C17): the files these steps actually open.
+        // Contents, not just existence: the files these steps actually open.
         def krakenDir = file(params.kraken_db)
         if (krakenDir.isDirectory()) {
             if (!file("${krakenDir}/taxDB").exists())
@@ -616,7 +616,7 @@ workflow {
     // --taxonomic_rank unconditionally, which would reject every host-depletion-only
     // run; that is the one change made while porting his checks.
     // Only when decontam actually runs: --start_from decontam --run_decontam false must reach
-    // the named C20 error ("Batch correction needs an input table"), not a rank error for a
+    // the "Batch correction needs an input table" error, not a rank error for a
     // step that is switched off.
     def needsDecontamContract = runDecontam && params.start_from != 'batch_correction'
 
@@ -652,7 +652,7 @@ workflow {
         }
         requireRoleParam('positive_values', params.positive_values)
         requireRoleParam('control_values', params.control_values)
-        // The metadata must carry the columns decontam will use (audit C17): fail at launch, not
+        // The metadata must carry the columns decontam will use: fail at launch, not
         // after classification has run.
         if (params.metadata_file && file(params.metadata_file).exists()) {
             def header = file(params.metadata_file).withReader { it.readLine() } ?: ''
@@ -691,7 +691,7 @@ workflow {
     }
 
     // Batch correction's own contract, checked at launch rather than when the task starts after
-    // every upstream stage (audit C04/C17; decision 16 for the covariates).
+    // every upstream stage.
     if (runBatchCorrection) {
         requirePathParam('batch_corr_env', params.batch_corr_env,
             'for batch correction (default: the lockfile with the repository\'s local conda channel)')
@@ -699,18 +699,18 @@ workflow {
             error "--batch_corr_seed must be an integer between 0 and 2147483647"
         // No input table for batch correction: decided HERE, before any channel exists. Raised
         // later inside the workflow, the error raced the sample-sheet reader, which could surface
-        // a misleading "Sample sheet has no data rows" first (audit C20).
+        // a misleading "Sample sheet has no data rows" first.
         def hasBatchInput = params.start_from == 'batch_correction' || runDecontam ||
                             (params.start_from == 'beginning' && (!skipConsensus || !skipClassification))
         if (!hasBatchInput) {
             error "Batch correction needs an input table: run it after decontamination (--run_decontam true), " +
                   "after consensus (--start_from beginning), or use --start_from batch_correction with " +
-                  "--decontam_otu_table and --metadata_file (audit C20)"
+                  "--decontam_otu_table and --metadata_file"
         }
         if (!params.taxonomic_rank || !(params.taxonomic_rank in ['genus', 'species'])) {
             error "--taxonomic_rank must be genus or species for batch correction (got '${params.taxonomic_rank ?: ''}')"
         }
-        // An empty or short pin would make the module's startsWith() check accept any install (audit D04).
+        // An empty or short pin would make the module's startsWith() check accept any install.
         if (params.conqur_sha.toString().trim().length() < 7) {
             error "--conqur_sha must be a commit SHA of at least 7 characters (got '${params.conqur_sha}')"
         }
@@ -720,7 +720,7 @@ workflow {
         def covariates = params.batch_corr_covariates.toString().split(',').collect { it.trim() }.findAll { it }
         if (!covariates || covariates.collect { it.toLowerCase() } == ['none']) {
             error "ConQuR needs >= 1 covariate that varies within batches; --batch_corr_covariates " +
-                  "'${params.batch_corr_covariates}' cannot be batch-corrected (decision 16). " +
+                  "'${params.batch_corr_covariates}' cannot be batch-corrected. " +
                   "Name the covariates, or pass --run_batch_correction false."
         }
         if (!params.metadata_file) {
@@ -762,13 +762,13 @@ workflow {
     // Written before any task is submitted, so a run that dies still records what it
     // was attempting. scripts/finalize_provenance.py fills in the outcome, the conda
     // versions actually installed and the output digests, from workflow.onComplete in
-    // main.nf. Ported from pksProfiler F16.
+    // main.nf. Ported from pksProfiler.
     //
     // Reference databases are fingerprinted by name/size/mtime (Provenance.data), not
     // by content: these are multi-gigabyte indexes and hashing them would dominate the
     // run. Scripts are fingerprinted by content (Provenance.code), because that is the
     // claim the record is actually making. The sample sheet and metadata are small and
-    // are content-hashed (Provenance.content); only the SHA-256 enters the record (audit C06).
+    // are content-hashed (Provenance.content); only the SHA-256 enters the record.
     def runFlags = [
         skip_host_depletion : skipHostDepletion,
         skip_classification : skipClassification,
@@ -780,12 +780,12 @@ workflow {
         run_alignment_validation: runValidation,
         skip_cohort_report  : skipCohortReport,
     ]
-    // The taxonomy DB alignment validation actually reads: mirrors STEP 3b (audit C06).
+    // The taxonomy DB alignment validation actually reads: mirrors STEP 3b.
     def validationTaxdb = params.validation_ref ? null :
         (params.validation_taxdb ?: (params.kraken_db ? "${params.kraken_db}/taxDB" : null))
     RunRecord.write(
         // One record per LAUNCH: `-resume` reuses the session id, so keying on it alone overwrote
-        // the previous launch's record (audit C06). The run name is new for every launch.
+        // the previous launch's record. The run name is new for every launch.
         RunRecord.path(params.tracedir, "${workflow.sessionId}_${workflow.runName}"),
         RunRecord.start([
             session_id  : workflow.sessionId.toString(),
@@ -797,7 +797,7 @@ workflow {
                 modules_digest  : Provenance.code("${projectDir}/Modules"),
                 decontam_script : Provenance.code(params.decontam_script),
                 batch_corr_script: Provenance.code(params.batch_corr_script),
-                envs_digest     : Provenance.specs("${projectDir}/conda_envs"),   // yml + lock/ (audit D08)
+                envs_digest     : Provenance.specs("${projectDir}/conda_envs"),   // yml + lock/
             ],
             invocation  : [
                 command_line    : workflow.commandLine,
@@ -821,7 +821,7 @@ workflow {
                 adapters             : Provenance.code(params.adapters),
                 microbial_scope      : Provenance.code(params.microbial_scope),
                 adapters_core        : Provenance.code(params.adapters_core),
-                // Alignment validation lane (audit C06). Recorded only when it runs: the cache
+                // Alignment validation lane. Recorded only when it runs: the cache
                 // listing is not free on Lustre, and an unused path is not a dependency.
                 validation_ref       : runValidation ? Provenance.data(params.validation_ref) : 'unused',
                 validation_taxdb     : runValidation ? Provenance.data(validationTaxdb) : 'unused',
@@ -835,7 +835,7 @@ workflow {
                 conda_enabled   : workflow.containerEngine == null,
                 conda_cache_dir : (System.getenv('NXF_CONDA_CACHEDIR') ?: "${projectDir}/.conda_cache"),
                 // Spec of each env the requested stages run in; the finaliser digests these
-                // rather than walking conda_cache_dir (audit C06/D08).
+                // rather than walking conda_cache_dir.
                 conda_envs      : RunRecord.condaEnvs(params, runFlags),
             ],
         ])
@@ -867,7 +867,7 @@ workflow {
                     def sampleID = row.patient?.trim()
                     if (!sampleID) error "Sample sheet row is missing a non-empty 'patient' value"
                     // IDs become file names, awk variables, CLI lists and table columns downstream.
-                    // Characters outside this set broke the validation batch (B07) and merges (C16).
+                    // Characters outside this set broke the validation batch and table merges.
                     if (!(sampleID ==~ /[A-Za-z0-9._-]+/)) {
                         error "Sample ID '${sampleID}' contains characters outside [A-Za-z0-9._-]; rename it in the sample sheet"
                     }
@@ -900,7 +900,7 @@ workflow {
             // Two rows with the same patient ID -- or IDs differing only by surrounding
             // whitespace, which `trim()` collapses -- used to flow straight through and
             // then collide in publishDir and in every merged table, one sample silently
-            // overwriting the other. This is the same defect as pksProfiler F03.
+            // overwriting the other. This is the same defect as pksProfiler.
             sample_sheet = sample_sheet
                 .toList()
                 .map { rows ->
@@ -920,10 +920,10 @@ workflow {
                 .flatMap()
 
             // Every sample the sheet asked for, so the QC summary can name one that produced
-            // nothing -- e.g. dropped by --sample_failure_strategy ignore (audit C10).
+            // nothing -- e.g. dropped by --sample_failure_strategy ignore.
             qcParts << sample_sheet.map { it[0] }.collectFile(name: 'expected_samples.txt', newLine: true, sort: true)
             // Each sample's input type, so the QC summary expects extraction of BAM/CRAM inputs only
-            // when it decides where a failed sample stopped (terminal_state, audit X05).
+            // when it decides where a failed sample stopped (terminal_state).
             qcParts << sample_sheet.map { "${it[0]}\t${it[1]}" }.collectFile(name: 'sample_input_types.tsv', newLine: true, sort: true)
 
             sample_sheet.branch {
@@ -942,9 +942,9 @@ workflow {
                 .set { EXTRACTED_BY_FLOOR }
             EXTRACTED_BY_FLOOR.drop.subscribe { id, reads, floor -> log.warn "Sample ${id} NOT ASSESSABLE (${floor}): excluded; not a microbial negative" }
             EXTRACTED_BY_FLOOR.keep.map { id, reads, floor -> tuple(id, reads) }.set { EXTRACTED_READS }
-            qcParts << extractReads.out.counts   // *.extract_counts.tsv: BAM/CRAM library denominator (C07)
-            qcParts << extractReads.out.aligner  // *.upstream_aligner.tsv: @PG aligner/-T and low-AS mode (L8)
-            qcParts << extractReads.out.provenance  // *.input_provenance.tsv: @SQ fingerprint, @PG chain (X13)
+            qcParts << extractReads.out.counts   // *.extract_counts.tsv: BAM/CRAM library denominator
+            qcParts << extractReads.out.aligner  // *.upstream_aligner.tsv: @PG aligner/-T and low-AS mode
+            qcParts << extractReads.out.provenance  // *.input_provenance.tsv: @SQ fingerprint, @PG chain
             // `pretrimmed`: reads extracted from a BAM/CRAM (not necessarily adapter-free).
             INPUTS_BY_TYPE.fastq
                 .map { sampleID, inputType, reads, references -> tuple(sampleID, reads, false) }
@@ -1092,7 +1092,7 @@ workflow {
             qcParts << BRACKEN_OUT.map { it[1] }          // *.krakenuniq.report.txt
             qcParts << BRACKEN_OUT.flatMap { it[4] }      // *.bracken.{G,S}.report.txt
 
-            // Low-score rescue survival: how many rescued reads KrakenUniq classified (L8).
+            // Low-score rescue survival: how many rescued reads KrakenUniq classified.
             if (LOW_AS_DEPLETED != null) {
                 LOW_AS_DEPLETED = LOW_AS_DEPLETED.join(BRACKEN_OUT.map { it -> tuple(it[0], it[2]) })
             }
@@ -1149,7 +1149,7 @@ workflow {
 
                 // Which samples' HUMAnN profiles finished: the QC summary reports a sample that MetaPhlAn
                 // ran on but HUMAnN did not (a failed task under --sample_failure_strategy ignore) as
-                // humann_status failed / terminal_state failed_at_humann, never silently (audit X05).
+                // humann_status failed / terminal_state failed_at_humann, never silently.
                 qcParts << HUMANN3_OUT.map { genefamilies, pathabundance, pathcoverage ->
                         genefamilies.name.replaceFirst(/_genefamilies\.tsv$/, '') }
                     .collectFile(name: 'humann3_completed.txt', newLine: true, sort: true)
@@ -1164,7 +1164,7 @@ workflow {
             log.info "Skipping taxonomic classification step"
         }
 
-        // Per-stage survival of the low-score rescued reads (--extract_low_score_mapped, L8):
+        // Per-stage survival of the low-score rescued reads (--extract_low_score_mapped):
         // only samples whose rescue was on reach here. Without classification the classified
         // FASTA is an empty list and low_as_reads_classified reads NA.
         if (LOW_AS_DEPLETED != null) {
@@ -1241,12 +1241,12 @@ workflow {
                 buildValidationRef(validationSpeciesList.out.species)
                 buildValidationRef.out.ref.first().set { VALIDATION_REF }
             }
-            // Batches are cut from the samples SORTED by ID, not in arrival order (audit X11, confirmed twice
+            // Batches are cut from the samples SORTED by ID, not in arrival order (confirmed twice
             // on CRC50 2026-10-02/05): arrival order differs between runs, so the same samples formed different
             // batches, every alignForValidation cache key changed and -resume re-aligned the whole cohort.
             // Validation waits for the whole cohort anyway (its reference is built from the consensus table).
             def validationBatchSize = params.validation_batch_size.toString().toInteger()
-            // Only samples that are columns of the species table are validated (audit X05). Under
+            // Only samples that are columns of the species table are validated. Under
             // --sample_failure_strategy ignore a sample whose Bracken task failed still has host-depleted
             // reads; batched in, the scorer stopped on it ("not columns of ...", exit 1) and the strict
             // cohort step ended the run after hours of validation. Such a sample is named in the log here
@@ -1390,7 +1390,7 @@ workflow {
         } else {
             error "Batch correction needs an input table: run it after decontamination (--run_decontam true), " +
                   "after consensus (--start_from beginning), or use --start_from batch_correction with " +
-                  "--decontam_otu_table and --metadata_file (audit C20)"
+                  "--decontam_otu_table and --metadata_file"
         }
 
         BATCH_CORRECTION(ch_batch_input)
@@ -1410,7 +1410,7 @@ workflow {
         def qcChannel = qcParts.first()
         qcParts.drop(1).each { part -> qcChannel = qcChannel.mix(part) }
         // The per-sample stages this run requested, in order, so the QC summary can name the stage a
-        // failed sample stopped at -- also one that EVERY sample failed (terminal_state, audit X05).
+        // failed sample stopped at -- also one that EVERY sample failed (terminal_state).
         def beginning = params.start_from == 'beginning'
         def qcStages = [
             (beginning && !skipHostDepletion) ? 'extraction' : null,
@@ -1467,7 +1467,7 @@ workflow {
         // the run's own outcome, hence the catch.
         //
         // The finaliser runs on the head job's python3, so it gets the launch environment's
-        // library and module paths unless they are dropped here (audit X04): with the TSCC login
+        // library and module paths unless they are dropped here: with the TSCC login
         // LD_LIBRARY_PATH it died on `import hashlib` (ascat's libcrypto) and RUN_REPORT was never
         // written while the run reported success. `env -u` drops them; -s ignores ~/.local.
         try {
@@ -1488,11 +1488,11 @@ workflow {
                 '--failed',    "${wfMeta.stats.failedCount}",
                 '--ignored',   "${wfMeta.stats.ignoredCount}",
                 // No --conda-cache-dir: the finaliser reads the envs this launch recorded
-                // instead of every env in the cache (audit C06/D08).
+                // instead of every env in the cache.
             ]
             def proc = finalise.execute()
             proc.waitForProcessOutput(System.out, System.err)
-            // Its exit status used to be ignored (audit X04). Non-zero: the record or RUN_REPORT is
+            // Its exit status used to be ignored. Non-zero: the record or RUN_REPORT is
             // incomplete, or (--tool_version_check strict) a task's tool-version record shows a tool
             // that is not the pinned build -- RUN_REPORT's TOOL VERSION MISMATCH section says which.
             if (proc.exitValue() != 0) {

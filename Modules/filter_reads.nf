@@ -1,11 +1,11 @@
 nextflow.enable.dsl=2
 
 process filterReads {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     tag "$sampleID"
     scratch true
     label 'filter_reads'
-    // Intermediate read/alignment files are published only with --save_intermediates true (audit C11);
+    // Intermediate read/alignment files are published only with --save_intermediates true;
     publishDir("${params.unmapped_bam_dir}", mode: 'copy', saveAs: { fn -> (params.save_intermediates.toString() == 'true' || !(fn =~ /\.(fastq|fq|fasta|fa|sam|bam|bowtie2\.bz2)(\.gz|\.bz2)?$/)) ? fn : null })
     conda "${params.fastp_env}"
     maxRetries 2
@@ -18,7 +18,7 @@ process filterReads {
     // cannot be applied to operator set".
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple val(sampleID),

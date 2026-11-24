@@ -1,7 +1,7 @@
 nextflow.enable.dsl=2
 
 process humann3 {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     tag "${sampleID}"
     label 'process_high'
     scratch true
@@ -18,7 +18,7 @@ process humann3 {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple path("*_genefamilies.tsv"),

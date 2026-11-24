@@ -15,7 +15,7 @@ DB was built):
     group, the scorer's fallback level
 Human T2T-CHM13v2.0 is added to the same reference so leftover human reads compete.
 
-Rebuild route (--from_manifest, Ludmil review #41): recording what was used and being able to
+Rebuild route (--from_manifest): recording what was used and being able to
 rebuild from that record are different capabilities. Given a preserved
 validation_reference_manifest.tsv, the build uses exactly its genome list -- no catalog, no new
 selection, no de-duplication (the manifest is the post-dedup list, in emission order) -- verifies
@@ -79,7 +79,7 @@ def md5(path):
 def load_summaries(cache, max_age_days, snapshot=None):
     """RefSeq assembly summaries, cached under cache/; refreshed when older than max_age_days.
 
-    `snapshot` (YYYY-MM) is part of the reference's cache key (decision 26, audit B04). A summary
+    `snapshot` (YYYY-MM) is part of the reference's cache key. A summary
     from another month is refreshed; if the snapshot names a past month, it cannot be rebuilt
     (NCBI serves only the current summary), so the build stops instead of mislabelling a newer panel.
     """
@@ -199,7 +199,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--species", default=None)
     ap.add_argument("--from_manifest", type=str, default=None,
-                    help="rebuild from a preserved validation_reference_manifest.tsv (review #41): "
+                    help="rebuild from a preserved validation_reference_manifest.tsv: "
                          "same genomes, md5-verified, ANI curation cross-checked against the record; "
                          "--species, the catalog, de-duplication and the size gate are not used")
     ap.add_argument("--cache_dir", required=True, help="shared cache for summaries, genomes and T2T")
@@ -218,7 +218,7 @@ def main(argv=None):
     ap.add_argument("--group_ani", type=float, default=92.0,
                     help="species whose anchors meet at this ANI form one fallback group (0 = none)")
     ap.add_argument("--max_ref_gb", type=float, default=40,
-                    help="refuse a planned reference larger than this many Gb of sequence (audit B05)")
+                    help="refuse a planned reference larger than this many Gb of sequence")
     ap.add_argument("--snapshot", default=None, help="RefSeq snapshot month (YYYY-MM) in the cache key")
     a = ap.parse_args(argv)
 
@@ -262,7 +262,7 @@ def main(argv=None):
             url = r["ftp_path"].rstrip("/").replace("ftp://", "https://") + f"/{leaf}_genomic.fna.gz"
             plan.append((s, r, url, os.path.join(gdir, leaf + "_genomic.fna.gz"), how))
 
-    # Size the reference BEFORE downloading or indexing anything (audit B05). RefSeq summaries carry
+    # Size the reference BEFORE downloading or indexing anything. RefSeq summaries carry
     # genome_size; a genome without it is counted at 5 Mb (a typical bacterium). Plus T2T (3.1 Gb).
     # A manifest rebuild skips the gate: that reference was already accepted once.
     known = [int(r["genome_size"]) for _, r, _, _, _ in plan if (r.get("genome_size") or "").isdigit()]

@@ -1,7 +1,7 @@
 nextflow.enable.dsl=2
 
 process FASTQC {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     scratch true
     label 'fastqc'
     publishDir("${params.fastqc_dir}", mode: 'copy')

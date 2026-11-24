@@ -82,10 +82,10 @@ def main(argv=None):
         tax = groups.get(label_of(species_from_clade(clade)), label_of(species_from_clade(clade)))
         row = {}
         for s in samples:
-            # a zero count is "absent" whatever its group's status (audit B06): it was never scored
+            # a zero count is "absent" whatever its group's status: it was never scored
             st = "absent" if counts[s] == 0 else status.get((s, tax), "unscored")
             report[clade][st] += 1
-            if st in ("failed", "unsupported"):   # unsupported: decision 29
+            if st in ("failed", "unsupported"):   # unsupported: too few supporting alignments
                 report[clade]["reads_removed"] += counts[s]
                 row[s] = 0.0
             else:
@@ -93,7 +93,7 @@ def main(argv=None):
         masked[clade] = row
 
     def fmt(v):
-        # Counts are written exactly: `:g` rounded anything >= 1e6 to 6 significant digits (audit A15).
+        # Counts are written exactly: `:g` rounded anything >= 1e6 to 6 significant digits.
         return str(int(v)) if float(v).is_integer() else repr(float(v))
 
     def write_table(path, rows):

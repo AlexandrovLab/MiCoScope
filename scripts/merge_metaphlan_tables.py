@@ -35,7 +35,7 @@ def merge(aaastrIn, ostm, gtdb):
             
         iIn = pd.read_csv(f, sep='\t', skiprows=len(headers), names=names, usecols=[0,2] if not gtdb else range(2), index_col=0)
         # The column is the sample ID: strip ONLY the known trailing suffix. The previous unanchored
-        # .replace('_profile', '') turned sample 'X_profile' into 'X', colliding silently (audit C16).
+        # .replace('_profile', '') turned sample 'X_profile' into 'X', colliding silently.
         sample = re.sub(r'(\.profiled_metagenome)?\.txt$', '', os.path.basename(f))
         profiles_list.append(pd.Series(data=iIn['relative_abundance'], index=iIn.index, name=sample))
 

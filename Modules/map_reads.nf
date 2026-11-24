@@ -1,11 +1,11 @@
 nextflow.enable.dsl=2
 
 process mapReads {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     tag "$sampleID"
     scratch true
     label 'mapReads'
-    // Intermediate read/alignment files are published only with --save_intermediates true (audit C11);
+    // Intermediate read/alignment files are published only with --save_intermediates true;
     // the final host-depleted reads are always published.
     publishDir("${params.mapped_reads_dir}", mode: 'copy', saveAs: { fn -> (params.save_intermediates.toString() == 'true' || fn.endsWith('.host_depleted.fastq.gz') || !(fn =~ /\.(fastq|fq|fasta|fa|sam|bam|bowtie2\.bz2)(\.gz|\.bz2)?$/)) ? fn : null })
     conda "${params.minimap2_env}"
@@ -17,7 +17,7 @@ process mapReads {
     // object and break `mapReads(...).set{}` at the call site.
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple val(sampleID),
@@ -33,7 +33,7 @@ process mapReads {
     // ADJACENT mate-named reads as one fragment (mate rescue), so the same reads were depleted
     // differently from BAM/CRAM (mates adjacent) and paired FASTQ (R1 block, then R2 block).
     // Measured on the real GRCh38/T2T indexes (SLURM 12425893): only human-like reads differ;
-    // F. nucleatum, B. fragilis and pks+ E. coli reads are identical in every order (audit X01, Ludmil E0).
+    // F. nucleatum, B. fragilis and pks+ E. coli reads are identical in every order.
     def frag = params.host_depletion_frag.toString() == 'no' ? '--frag=no' : ''
     """
     set -euo pipefail

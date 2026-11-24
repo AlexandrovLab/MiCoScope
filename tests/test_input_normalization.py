@@ -190,7 +190,7 @@ class InputNormalizationTests(unittest.TestCase):
             for required in ("--account=", "--partition=", "--qos=", "--time="):
                 self.assertTrue(any(required in lines[i] for i in directives),
                                 f"{name} is missing {required}")
-            self.assertNotIn("l1joseph", path.read_text(), name)
+            self.assertNotRegex(path.read_text(), r"/users/[a-z0-9]+/|/home/[a-z0-9]+/", name)
 
 
 if __name__ == "__main__":

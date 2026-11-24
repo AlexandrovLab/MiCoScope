@@ -30,11 +30,11 @@ NA = "NA"
 
 COLUMNS = [
     "sample",
-    # library denominator, BAM/CRAM only (audit C07 / pksProfiler F09). For BAM/CRAM input,
+    # library denominator, BAM/CRAM only (as in pksProfiler). For BAM/CRAM input,
     # reads_raw below is the UNMAPPED subset the pipeline extracted, not the library; these
     # columns carry the library itself. NA for FASTQ input, where reads_raw is the library.
     "library_primary_records", "extracted_unmapped_records", "pct_library_unmapped",
-    # Duplicate-flagged (0x400) and QC-failed (0x200) records (Ludmil review #12): tallied over the
+    # Duplicate-flagged (0x400) and QC-failed (0x200) records: tallied over the
     # library's primary records and over the extracted reads (FLAG 4 + rescued), with their
     # percentages. Counted, never excluded; the flag-setting programs are in input_pg_chain.
     # All NA for FASTQ input, which carries no flags.
@@ -42,7 +42,7 @@ COLUMNS = [
     "pct_library_duplicate", "pct_library_qcfail", "pct_library_dup_and_qcfail",
     "extracted_duplicate_reads", "extracted_qcfail_reads", "extracted_dup_and_qcfail_reads",
     "pct_extracted_duplicate", "pct_extracted_qcfail", "pct_extracted_dup_and_qcfail",
-    # low-score mapped rescue, BAM/CRAM only (--extract_low_score_mapped; Ludmil 1 Oct, L8). The
+    # low-score mapped rescue, BAM/CRAM only (--extract_low_score_mapped). The
     # upstream aligner, version and bwa -T come from @PG; low_as_mode is on/off and
     # low_as_mode_reason why (scripts/low_score_rescue.py REASONS). low_as_reads_extracted are
     # primary MAPPED records with AS < 30 added to the FLAG 4 reads (so reads_raw = FLAG 4 +
@@ -54,7 +54,7 @@ COLUMNS = [
     "upstream_aligner", "upstream_aligner_version", "upstream_bwa_min_score",
     "low_as_mode", "low_as_mode_reason", "low_as_reads_extracted", "low_as_no_as_records",
     "low_as_reads_after_depletion", "low_as_reads_classified", "low_as_share_of_bracken",
-    # input provenance, BAM/CRAM only (audit X13; scripts/header_provenance.py, from the header the
+    # input provenance, BAM/CRAM only (scripts/header_provenance.py, from the header the
     # rescue decision reads): the @SQ fingerprint (md5 of ordered SN:LN) and M5-set fingerprint,
     # contig count, build from chr1's length, contig classes (ALT / hs38d1 decoy / HLA / viral incl.
     # chrEBV), the @PG chain as program:version, bwa mem options reduced to letters and numbers, and
@@ -76,7 +76,7 @@ COLUMNS = [
     # classification
     # KrakenUniq clade counts. classified = root, including human (9606), synthetic construct
     # (32630) and any other animal or plant reads; microbial = the summed clade counts of the
-    # --microbial_scope taxa (bacteria, archaea, fungi, fixed protozoan clades; review #14), the
+    # --microbial_scope taxa (bacteria, archaea, fungi, fixed protozoan clades), the
     # quantity --consensus_min_reads gates on.
     "kraken_classified_reads", "kraken_human_reads", "kraken_synthetic_reads",
     "bracken_microbial_reads", "cleared_consensus_gate",
@@ -84,7 +84,7 @@ COLUMNS = [
     "bracken_human_reads", "bracken_synthetic_reads", "pct_bracken_human", "pct_bracken_synthetic",
     "bracken_genera", "bracken_species",
     # species rank, whole sample: sum(added) / sum(estimated) -- how much of the Bracken total is
-    # statistical redistribution rather than directly assigned reads (Ludmil review #18). The per-
+    # statistical redistribution rather than directly assigned reads. The per-
     # taxon breakdown is bracken_count_components.tsv, written next to this table.
     "bracken_added_fraction",
     "metaphlan_genera", "metaphlan_species",
@@ -94,23 +94,23 @@ COLUMNS = [
     "decontam_result_status", "decontam_result_reason", "genus_rollup_status",
     # batch correction, per corrected rank: included, or excluded: <reason>
     "batch_species_status", "batch_genus_status",
-    # what happened to the sample, in one word (audit C13/C02/C10): no_outputs (in the sample sheet
+    # what happened to the sample, in one word: no_outputs (in the sample sheet
     # but nothing reached QC: a failed or --sample_failure_strategy ignore'd task),
     # dropped_zero_after_fastp, no_reads_after_depletion, below_bracken_threshold (Bracken wrote a
     # header-only no-call), profiled; NA when the stages that decide it did not run
     "bracken_status", "sample_status",
-    # Gated per-sample stages (audit X05): ran | below_gate | failed | not_requested, and for HUMAnN
+    # Gated per-sample stages: ran | below_gate | failed | not_requested, and for HUMAnN
     # also metaphlan_failed. `failed` means the sample cleared --consensus_min_reads (and, for HUMAnN,
     # MetaPhlAn ran) but the stage left no output: a failed task under --sample_failure_strategy
     # ignore, never "no microbes". NA when classification itself did not finish for the sample.
     "metaphlan_status", "humann_status",
-    # QC floor (pksProfiler COHORT_CHECKS A3; port review #34): pass, or why the sample cannot be
+    # QC floor (ported from pksProfiler): pass, or why the sample cannot be
     # assessed -- unmapped_filtered_upstream (input_unmapped_filter is not none), no_unmapped_records
     # (zero FLAG 4 records in the BAM/CRAM), below_min_reads_after_depletion (fewer host-depleted
     # reads than --min_reads_after_depletion, when > 0). NA when not evaluated. A not-assessable
     # sample is never a microbial negative: terminal_state not_assessable_<reason>.
     "qc_floor",
-    # How the sample ENDED, exactly one of (audit X05/X06; pksProfiler e126439):
+    # How the sample ENDED, exactly one of:
     #   completed_profiled | completed_no_call | completed   every per-sample stage it needed finished
     #   failed_at_<stage>        the first stage it needed that left no output (a failed task)
     #   excluded_<reason>        dropped by the pipeline on purpose: zero_reads_after_fastp, or
@@ -266,7 +266,7 @@ def infer_stages(rows: dict) -> list[str]:
 
 
 def pct(numerator, denominator):
-    # A zero count over a real denominator is 0.00, not NA (audit C13): NA only when a value is
+    # A zero count over a real denominator is 0.00, not NA: NA only when a value is
     # genuinely unknown or the denominator is zero.
     if numerator in (None, "", NA) or denominator in (None, "", NA):
         return NA
@@ -338,7 +338,7 @@ def parse_extract_counts(path: Path) -> dict:
     return {
         "library_primary_records": record.get("library_primary_records") or NA,
         "extracted_unmapped_records": record.get("extracted_unmapped_records") or NA,
-        # Flag tallies (review #12); absent from extract_counts.tsv written before 2026-11-16: NA.
+        # Flag tallies; absent from extract_counts.tsv written before 2026-11-16: NA.
         "library_duplicate_records": record.get("library_duplicate_records") or NA,
         "library_qcfail_records": record.get("library_qcfail_records") or NA,
         "library_dup_and_qcfail_records": record.get("library_dup_and_qcfail_records") or NA,
@@ -410,7 +410,7 @@ def parse_depletion(path: Path) -> dict:
 
 HUMAN_TAXID = "9606"
 SYNTHETIC_TAXID = "32630"   # "synthetic construct": UniVec/EmVec vectors, adapters, primers
-# The taxa that count as microbial (review #14): conf/microbial_scope_taxids.tsv, overridable with
+# The taxa that count as microbial: conf/microbial_scope_taxids.tsv, overridable with
 # --microbial-scope. The pipeline passes --microbial_scope, the same file Bracken.nf's gate reads.
 DEFAULT_SCOPE_PATH = Path(__file__).resolve().parents[1] / "conf" / "microbial_scope_taxids.tsv"
 
@@ -435,7 +435,7 @@ def parse_krakenuniq_clades(path: Path, scope: set[str]) -> dict:
 
     Clade count = column 2 of the 9-column report; taxID is column 7. A taxon the report does
     not list had no reads (0). Root is required: without it every value is NA.
-    bracken_microbial_reads = the summed clade counts of the scope taxids (review #14): bacteria,
+    bracken_microbial_reads = the summed clade counts of the scope taxids: bacteria,
     archaea, fungi and the fixed protozoan clades -- NOT root minus human/synthetic, which still
     counted other animal and plant reads (the rule until 2026-11-16). The scope taxids are mutually
     non-nested, so the sum never counts a read twice.
@@ -562,7 +562,7 @@ def parse_bracken_added_fraction(path: Path):
 
 
 def write_bracken_components(inputs: Path, output: Path) -> None:
-    """One row per sample x rank x taxon: Bracken's three counts side by side (review #18).
+    """One row per sample x rank x taxon: Bracken's three counts side by side.
 
     Interpreting the final estimate as reads that directly matched the taxon overstates the
     evidence; this table shows how much of each estimate is redistribution. added_fraction is
@@ -740,7 +740,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
         row = row_for(sample)
         row.update(parse_krakenuniq_clades(path, scope))
         # The gate uses microbial reads (root minus human and synthetic construct), exactly as
-        # Bracken.nf applies it (decision 1, 27 Oct 2026).
+        # Bracken.nf applies it.
         micro = row.get("bracken_microbial_reads")
         row["cleared_consensus_gate"] = (
             NA if micro in (None, NA) else ("true" if micro >= min_reads else "false")
@@ -753,7 +753,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
         bracken_genera[sample] = parse_bracken_taxa(path)
         row = row_for(sample)
         row["bracken_genera"] = len(bracken_genera[sample])
-        # Bracken.nf writes a header-only report when a sample is below its threshold (C02): that is
+        # Bracken.nf writes a header-only report when a sample is below its threshold: that is
         # a no-call, not "ran and found 0 taxa".
         with path.open() as handle:
             data_rows = sum(1 for line in handle if line.strip()) - 1
@@ -829,7 +829,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
         for sample, status in ledger.items():
             row_for(sample)[f"batch_{rank}_status"] = status
 
-    # Samples the sheet asked for that produced nothing at all (audit C10).
+    # Samples the sheet asked for that produced nothing at all.
     expected: set[str] = set()
     for path in sorted(inputs.rglob("expected_samples.txt")):
         for sample in (s.strip() for s in path.read_text().splitlines()):
@@ -881,7 +881,7 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
                                           row.get("library_primary_records"))
         row["pct_retained_of_library"] = pct(row.get("reads_host_depleted"),
                                              row.get("library_primary_records"))
-        # Flag-tally percentages (review #12). The extracted denominator is FLAG 4 + rescued reads;
+        # Flag-tally percentages. The extracted denominator is FLAG 4 + rescued reads;
         # a pre-rescue NA low-AS count degrades to the FLAG 4 count alone.
         for flag in ("duplicate", "qcfail", "dup_and_qcfail"):
             row[f"pct_library_{flag}"] = pct(row.get(f"library_{flag}_records"),
@@ -894,13 +894,13 @@ def build(inputs: Path, min_reads: int, stages: list[str] | None = None,
             row[f"pct_extracted_{flag}"] = pct(row.get(f"extracted_{flag}_reads"), extracted_total)
         check_low_as(row)
         if row.get("low_as_mode") == "off":
-            # Nothing was rescued, so nothing can survive: 0, not unknown (audit C13).
+            # Nothing was rescued, so nothing can survive: 0, not unknown.
             for column in ("low_as_reads_after_depletion", "low_as_reads_classified"):
                 if row.get(column) in (None, NA) and row.get("low_as_reads_extracted") == "0":
                     row[column] = 0
         row["low_as_share_of_bracken"] = pct(row.get("low_as_reads_classified"),
                                              row.get("kraken_classified_reads"))
-        # Gated stages and the terminal state (audit X05). A sample is per-sample when the sheet
+        # Gated stages and the terminal state. A sample is per-sample when the sheet
         # named it or a per-sample stage reported it; rows created only by decontamination or batch
         # correction (--start_from decontam / batch_correction) are not.
         per_sample = row["sample"] in expected or any(
@@ -922,9 +922,9 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--components", type=Path, default=None,
                         help="also write the per sample x taxon Bracken count-components table "
-                             "(assigned / added / estimated; review #18) to this path")
+                             "(assigned / added / estimated) to this path")
     parser.add_argument("--microbial-scope", type=Path, default=DEFAULT_SCOPE_PATH,
-                        help="the taxid TSV defining microbial reads (review #14); the pipeline "
+                        help="the taxid TSV defining microbial reads; the pipeline "
                              "passes --microbial_scope, the same file Bracken.nf's gate reads")
     parser.add_argument("--min-reads", type=int, default=100000,
                         help="--consensus_min_reads, for cleared_consensus_gate")

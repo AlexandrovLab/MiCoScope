@@ -1,11 +1,11 @@
 nextflow.enable.dsl=2
 
 process Bracken {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
 
     scratch true
     label 'process_high_disk'
-    // Intermediate read/alignment files are published only with --save_intermediates true (audit C11);
+    // Intermediate read/alignment files are published only with --save_intermediates true;
     // metaphlan.fastq.gz (a copy of the reads) and the classified/unclassified FASTA included.
     publishDir "${params.krakenuniq_bracken_dir}", mode: 'copy', saveAs: { fn -> (params.save_intermediates.toString() == 'true' || !(fn =~ /\.(fastq|fq|fasta|fa|sam|bam|bowtie2\.bz2)(\.gz|\.bz2)?$/)) ? fn : null }
     conda "${params.krakenuniq_bracken_env}"
@@ -20,7 +20,7 @@ process Bracken {
     // it actually fired. The optional file is therefore its own named output.
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple val(sampleID), path("*.krakenuniq.report.txt"),
@@ -41,7 +41,7 @@ process Bracken {
 
     """
     # A failing stage inside a pipeline must fail the task; bash judges a pipe by its last
-    # command alone (Ludmil review #22/#23). The bracken no-call block below manages its own
+    # command alone. The bracken no-call block below manages its own
     # errors with set +e/-e and contains no pipe, so it is unaffected.
     set -o pipefail
 
@@ -93,7 +93,7 @@ process Bracken {
         bracken_kraken_report="${SAMPLE_NAME}.bracken.\${lvl}.krakenreport.txt"
         bracken_kraken_mpa_report="${SAMPLE_NAME}.bracken.\${lvl}.mpa.krakenreport.txt"
         # A thin sample where no taxon at this level reaches -t makes Bracken print "Error: no reads
-        # found" and exit 1, which under errorStrategy 'finish' ended the whole cohort (audit C02).
+        # found" and exit 1, which under errorStrategy 'finish' ended the whole cohort.
         # That one case becomes an explicit below-threshold no-call with the normal file layout
         # (header-only report and mpa); any other Bracken error still fails the task.
         set +e
@@ -116,7 +116,7 @@ process Bracken {
 
     # Gate MetaPhlAn per sample on MICROBIAL reads: the summed KrakenUniq clade counts of the taxa
     # listed in --microbial_scope -- bacteria, archaea, fungi and a fixed list of protozoan
-    # clades, the validation reference's scope (Ludmil review #14; Ammal, 16 Nov 2026). History:
+    # clades, the validation reference's scope. History:
     # until 27 Oct 2026 the gate used the root count alone (93-99% synthetic construct in CRC50
     # Baylor samples); until 16 Nov root minus human minus synthetic construct, which still counted
     # any other animal or plant reads. The scope taxids are mutually non-nested, so nothing is
@@ -132,7 +132,7 @@ process Bracken {
     #      so no rank comparison can ever match. They are identified by taxName;
     #   3. root and unclassified are SIBLINGS, so root-minus-unclassified is the wrong
     #      arithmetic. Root's own clade count is the classified total.
-    # taxName is trimmed before comparing, exactly as build_qc_summary.py does (audit A16), so the
+    # taxName is trimmed before comparing, exactly as build_qc_summary.py does, so the
     # gate and the QC column cannot disagree on a padded name.
     MICROBIAL_READS=\$(awk -F '\t' -v scope_file="${params.microbial_scope}" '
         BEGIN {

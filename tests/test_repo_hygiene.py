@@ -100,12 +100,12 @@ class CondaEnvHygiene(unittest.TestCase):
                 self.assertNotIn("repo.anaconda.com", text)
 
     def test_extraction_comment_names_the_locked_samtools(self):
-        """audit D11: the category-0 routing claim must name the samtools the lockfile installs."""
+        """The category-0 routing claim must name the samtools the lockfile installs."""
         m = re.search(r"/samtools-(\d+(?:\.\d+)+)-", _read(LOCK / "samtools_env.linux-64.txt"))
         self.assertIsNotNone(m, "samtools not found in the samtools_env lockfile")
         self.assertIn(f"samtools {m.group(1)}", _read(REPO / "Modules" / "extract_reads.nf"),
                       "Modules/extract_reads.nf does not cite the locked samtools version; re-check the "
-                      "routing on it (cmpipeline/CHECK_ROUND2.sh) and update the comment")
+                      "FLAG 4 / AS < 30 routing on it and update the comment")
 
     def test_no_env_is_prebuilt_outside_nextflow(self):
         """Every environment, batch correction included, is built by Nextflow from a lockfile;

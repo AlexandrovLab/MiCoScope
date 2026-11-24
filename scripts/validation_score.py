@@ -23,7 +23,7 @@ Per taxon, measured on its best-supported genome (the accession with most suppor
                    mates ~500 bp apart would otherwise halve the apparent spread. With --bins_reads
                    unique (default, 2026-09-30) only fragments UNIQUE to the taxon are used, and the
                    expectation is taken from their count: reads shared with an abundant relative pile
-                   into conserved regions and failed truly present minor species (audit V01: 22/42
+                   into conserved regions and failed truly present minor species (22/42
                    synthetic minors failed; 4/42 with unique-read bins). --bins_reads all restores
                    the 2026-09-23 rule.
   median_identity  1 - NM / aligned columns, over all supporting alignments
@@ -31,14 +31,14 @@ Per taxon, measured on its best-supported genome (the accession with most suppor
 
 Columns: supporting_reads, unique_reads, multi_reads, unique_fraction and median_identity POOL every
 genome of the taxon; breadth_ratio, bins_ratio, reads_on_best and genome_len use only the best
-genome. minimap2_count equals unique_reads (reported, never used). (audit B08)
+genome. minimap2_count equals unique_reads (reported, never used).
 
 Status, tested in this order (thresholds are arguments; defaults from the 2026-09-23 benchmark):
   unsupported       Bracken >= --min_support but supporting reads < --min_confirmed (10): the reads are
-                    not this species'; zeroed like `failed` (decision 29, as PRISM)
+                    not this species'; zeroed like `failed`
   insufficient      supporting reads over all genomes < --min_support (Bracken too low to test, or
                     --min_confirmed..--min_support-1 supporting reads)
-  failed            unique_fraction < --min_unique_frac (a shadow of another species; audit B03)
+  failed            unique_fraction < --min_unique_frac (a shadow of another species)
   insufficient      reads on the best genome < --min_support (spread thin over many genomes)
   failed            identity < --min_identity (all supporting reads), whatever the unique-read depth
   insufficient      with --bins_reads unique: fewer than --min_support UNIQUE reads on the best genome,
@@ -119,7 +119,7 @@ def main(argv=None):
     ap.add_argument("--min_bins_ratio", type=float, default=0.5)
     ap.add_argument("--min_identity", type=float, default=0.98)
     ap.add_argument("--min_unique_frac", type=float, default=0.05,
-                    help="0.02 until 2026-09-30; 0.05 with unique-read bins (audit V01/V02)")
+                    help="0.02 until 2026-09-30; 0.05 with unique-read bins")
     ap.add_argument("--bins_reads", choices=("unique", "all"), default="unique",
                     help="reads the bins test is computed on (default unique; 'all' = 2026-09-23 rule)")
     ap.add_argument("--bin_size", type=int, default=10_000)
@@ -229,18 +229,18 @@ def low_support_flag(estimate, supporting, min_estimate=1000, max_ratio=0.01):
 
 
 # minimap2_count = reads minimap2 assigns to this taxon ALONE (= unique_reads): the alignment-based
-# count the DESIGN promised, reported for sensitivity analysis and never used downstream (B08).
+# count, reported for sensitivity analysis and never used downstream.
 # supporting/unique/multi pool every genome of the taxon; breadth, bins and reads_on_best use the
 # best-supported genome only -- as the column names say.
 COLS = ["sample", "taxon", "members", "bracken_reads", "minimap2_count", "supporting_reads", "unique_reads",
         "multi_reads", "unique_fraction",
-        # Support-to-estimate ratios (Ludmil review #3/#16/#17, reporting only -- NEVER a pass
+        # Support-to-estimate ratios (reporting only -- NEVER a pass
         # criterion): supporting and unique reads, each relative to the Bracken estimate the row is
         # about. Bracken can estimate many reads where few align (ratio << 1, redistribution), and a
         # read tied across species supports each of them, so summed support exceeds distinct reads.
         # NA when the estimate is 0.
         "support_to_bracken_ratio", "unique_to_bracken_ratio",
-        # Low-support flag (review #3): "yes" when Bracken estimates many reads (>= --low_support_min_estimate)
+        # Low-support flag: "yes" when Bracken estimates many reads (>= --low_support_min_estimate)
         # but few of them align (support_to_bracken_ratio < --low_support_ratio), so a 10,000-read call
         # backed by ~20 alignments is visibly different from a well-supported one. A FLAG ONLY: it never
         # changes a status, the mask or any count (the plan adds no new exclusion rule). NA at estimate 0.
@@ -284,7 +284,7 @@ class SampleScorer:
                        next(x for x in top if taxon(x[1].split("|", 1)[0]) == t))
             acc = hit[1].split("|")[1]
             self.support[(t, acc)].append((hit[1], hit[2], hit[2] + hit[3], hit[5], qname, hit[3], len(taxa) == 1))
-            # Export only reads that are NOT tied with human (audit B10): a read whose best hits
+            # Export only reads that are NOT tied with human: a read whose best hits
             # include human is not evidence for a microbe, whatever else it also matches.
             if self.tmpdir and t != HUMAN_LABEL and HUMAN_LABEL not in taxa and seq and seq != "*":
                 if t not in self.handles:   # temp files named by index: labels may hold '/'
@@ -353,10 +353,10 @@ class SampleScorer:
             row["unique_fraction"] = f"{uniq[t] / tot:.4f}" if tot else "NA"
             fail = []
             # Human is in the index only as the competitor that soaks up host reads; a Homo_sapiens
-            # row in a pass-through / --skip_consensus table is never scored or masked (audit B09).
+            # row in a pass-through / --skip_consensus table is never scored or masked.
             # Bracken reported enough reads to test (>= min_support), yet alignment backs almost
             # none of them: the species is not supported, and its count is zeroed like `failed`
-            # (decision 29; PRISM excludes taxa with < 10 uniquely confirmed reads).
+            #.
             tested = self.bracken[t] >= a.min_support
             if t not in self.ref_taxa or t == HUMAN_LABEL:
                 status = "not_in_reference"
@@ -370,7 +370,7 @@ class SampleScorer:
                 by_contig = collections.defaultdict(list); frag_bin = {}
                 for c, st, en, ident, q, rl, u in hits:
                     by_contig[c].append((st, en))
-                # Spread is judged on the reads the taxon does not share (audit V01), unless
+                # Spread is judged on the reads the taxon does not share, unless
                 # --bins_reads all. Breadth (reported only) and identity still use every read.
                 bhits = [h for h in hits if h[6]] if a.bins_reads == "unique" else hits
                 nb = len(bhits)
@@ -391,7 +391,7 @@ class SampleScorer:
                            bins_ratio=f"{bins_ratio:.4f}", median_identity=f"{med:.4f}",
                            bins_reads=a.bins_reads, reads_for_bins=nb)
                 total = row["supporting_reads"]
-                # Order matters (audit B03, 2026-09-23). A shadow -- every read shared with
+                # Order matters. A shadow -- every read shared with
                 # another taxon -- is detectable from all its supporting reads, however
                 # thinly they spread over its many strain genomes. Spread and identity need
                 # depth on ONE genome, gated exactly as in the benchmark (reads on best).

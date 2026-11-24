@@ -1,7 +1,7 @@
 import java.nio.file.Path
 
 /**
- * The QC floor (pksProfiler COHORT_CHECKS A3; CMPipeline port review #34), the parts main.nf needs.
+ * The QC floor (ported from pksProfiler), the parts main.nf needs.
  *
  * A sample is NOT ASSESSABLE -- never a microbial negative -- when its BAM/CRAM has no FLAG 4
  * record, when its @PG chain shows the unmapped reads were filtered upstream (extractReads decides

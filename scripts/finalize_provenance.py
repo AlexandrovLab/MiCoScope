@@ -4,14 +4,14 @@
 The workflow writes the launch half (commit, parameters, reference digests, requested
 stages) before any task runs. This adds what only the end of a run knows -- the
 outcome, what each process actually cost, the envs this run used and what they pinned,
-what each task actually ran (the runtime tool-version records, audit K06/K07), and SHA-256
+what each task actually ran (the runtime tool-version records), and SHA-256
 digests of the cohort result tables -- and writes both halves out:
 
   <tracedir>/provenance/<sessionId>_<runName>.json   one per launch, machine-readable
   <tracedir>/RUN_REPORT.txt                          the same run in reading order, appended
 
 `-resume` reuses the session id, so the run name is part of the key: each launch keeps
-its own record (audit C06).
+its own record.
 
 Called from the workflow.onComplete handler in nextflow.config. It lives in Python
 rather than inline in the config because classes in lib/ are not visible to the config
@@ -21,7 +21,7 @@ Exit status: 0, or 1 when --tool_version_check is strict and a task's record sho
 is not the pinned build (or a recording task left no record). The onComplete handler in main.nf
 reports a non-zero exit as an error; it cannot change the run's own status.
 
-Ported from pksProfiler (F16). Standard library only.
+Ported from pksProfiler. Standard library only.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def read_trace(path: Path) -> list[dict]:
 
 def summarise_processes(rows: list[dict]) -> list[dict]:
     """Per-process cost. This is the table that lets resource requests be sized from
-    measurement rather than guessed -- see MERGE_CHECKLIST 4.5."""
+    measurement rather than guessed."""
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         grouped[process_name(row.get("name", "?"))].append(row)
@@ -106,7 +106,7 @@ def summarise_processes(rows: list[dict]) -> list[dict]:
 
 
 # Packages named in the human-readable report. The JSON keeps every package; this list
-# only decides what RUN_REPORT.txt prints. Widened for D08 (bowtie2, diamond, htslib,
+# only decides what RUN_REPORT.txt prints. Widened (bowtie2, diamond, htslib,
 # kraken2, skani, the R stats packages, ConQuR and cqrReg were all missing).
 INTERESTING = {
     "samtools", "htslib", "fastp", "fastqc", "minimap2", "bowtie2", "diamond", "multiqc",
@@ -117,7 +117,7 @@ INTERESTING = {
 }
 
 # R packages installed into the batch-correction env from GitHub/CRAN after the conda
-# solve, so conda-meta cannot see them (audit C06/D03/D08).
+# solve, so conda-meta cannot see them.
 R_PACKAGES_OF_RECORD = ("ConQuR", "cqrReg")
 DESCRIPTION_FIELDS = ("Package", "Version", "RemoteType", "RemoteRepo", "RemoteUsername",
                       "RemoteRef", "RemoteSha", "Packaged", "CMPipelinePatch")
@@ -138,7 +138,7 @@ def explicit_digest(lines: list[str]) -> str:
     """SHA-256 of the sorted `url#md5` lines of an explicit spec.
 
     Computed the same way from a lockfile and from a built env's conda-meta, so an env
-    built exactly from its lockfile carries the same value as the lockfile (audit D08).
+    built exactly from its lockfile carries the same value as the lockfile.
     """
     body = "\n".join(sorted(set(line.strip() for line in lines if line.strip())))
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -216,7 +216,7 @@ def prefix_env(prefix: Path, conqur_sha: str | None = None) -> dict:
             desc = read_description(library / name / "DESCRIPTION")
             entry["r_packages"][name] = desc or "absent"
         # Everything in the R library that no conda package owns: installed by
-        # install_conqur.R or at run time, from CRAN/GitHub (audit D03).
+        # install_conqur.R or at run time, from CRAN/GitHub.
         untracked = {}
         for pkg_dir in sorted(library.iterdir()):
             if pkg_dir.is_dir() and pkg_dir.name not in owned and (pkg_dir / "DESCRIPTION").is_file():
@@ -256,7 +256,7 @@ def env_record(spec: str, conqur_sha: str | None = None) -> dict:
 
 
 def conda_envs(specs: dict[str, str], conqur_sha: str | None = None) -> dict[str, dict]:
-    """One entry per env THIS run used, keyed by its parameter name (audit C06/D08).
+    """One entry per env THIS run used, keyed by its parameter name.
 
     `specs` is the resolved params.*_env map the launch half wrote, already narrowed to
     the stages this launch ran. The conda cache directory is not walked: it also holds
@@ -287,7 +287,7 @@ def software_summary(envs: dict[str, dict]) -> dict[str, list[str]]:
     return summary
 
 
-# ------------------------------------------------------------- tool versions (K06/K07)
+# ------------------------------------------------------------- tool versions
 #
 # conda_envs() above is what each env's spec PINNED. What RAN is recorded by the task itself:
 # scripts/record_tool_versions.sh, rendered into every process that runs a tool by
@@ -295,7 +295,7 @@ def software_summary(envs: dict[str, dict]) -> dict[str, list[str]]:
 # its version and location, and writes the answer to the work dir's .tool_versions.tsv. The two
 # differ exactly when something earlier on PATH shadows the environment: CRC50 attempt 1 (Job
 # 12380606) ran minimap2 2.24 in every mapReads task while the lockfile said 2.28.
-# Ported from pksProfiler (F16, 2bc7ca9 / 2c0f8c8), adapted to explicit lockfiles.
+# Ported from pksProfiler (2bc7ca9 / 2c0f8c8), adapted to explicit lockfiles.
 
 TOOL_RECORD = ".tool_versions.tsv"
 # Statuses the task itself assigns that mean "not the pinned build from its own env".
@@ -561,7 +561,7 @@ def render_tool_versions(summary: dict) -> list[str]:
 # ------------------------------------------------------------------ output checksums
 
 # Cohort-level result tables, per results-directory parameter: explicit globs, at most
-# two levels deep, never a recursive scan of params.outdir (audit C06). Per-sample
+# two levels deep, never a recursive scan of params.outdir. Per-sample
 # outputs (reads, per-sample Bracken/MetaPhlAn reports, validation per_sample/) are
 # deliberately not listed.
 COHORT_TABLES = {
@@ -627,7 +627,7 @@ def output_checksums(params: dict) -> dict:
             "total_bytes": sum(entry["bytes"] for entry in files)}
 
 
-# ------------------------------------------------------------- low-score rescue (L8)
+# ------------------------------------------------------------- low-score rescue
 
 LOW_AS_COUNTS = ("low_as_reads_extracted", "low_as_reads_after_depletion", "low_as_reads_classified")
 
@@ -672,7 +672,7 @@ def low_score_rescue_summary(params: dict) -> dict | None:
     }
 
 
-# ------------------------------------------------------ input alignments (X13 / E3)
+# ------------------------------------------------------ input alignments
 
 
 def _qc_rows(params: dict) -> list[dict] | None:
@@ -746,7 +746,7 @@ def render_input_alignments(summary: dict | None) -> list[str]:
     return out
 
 
-# ------------------------------------------------------------ database versions (X14)
+# ------------------------------------------------------------ database versions
 
 
 def _sibling(name: str):
@@ -792,7 +792,7 @@ def render_database_versions(summary: dict | None) -> list[str]:
     return lines
 
 
-# ------------------------------------------------------- sample outcomes (X05/X06)
+# ------------------------------------------------------- sample outcomes
 
 
 def sample_outcomes(params: dict) -> dict | None:
@@ -821,7 +821,7 @@ def sample_outcomes(params: dict) -> dict | None:
         "samples": len(rows),
         "by_state": by_state,
         "failed": sum(n for state, n in by_state.items() if state.startswith("failed_at_")),
-        # QC floor (review #34): not microbial negatives; excluded from the cohort tables unless
+        # QC floor: not microbial negatives; excluded from the cohort tables unless
         # --qc_floor_action flag.
         "not_assessable": sum(n for state, n in by_state.items() if state.startswith("not_assessable_")),
         "qc_floor_action": params.get("qc_floor_action") or "exclude",
@@ -929,7 +929,7 @@ def render(record: dict, processes: list[dict], software: dict[str, list[str]],
         add(f"  {name:<22}{digest}")
     add("")
 
-    # Which release each database was, and whether it is still the frozen one (X14).
+    # Which release each database was, and whether it is still the frozen one.
     for line in render_database_versions(record.get("databases")):
         add(line)
 
@@ -948,7 +948,7 @@ def render(record: dict, processes: list[dict], software: dict[str, list[str]],
                 add("      *** ConQuR RemoteSha differs from --conqur_sha ***")
         add("")
 
-    # What each task actually ran (K06/K07): the CONDA ENVS section above is what was specified.
+    # What each task actually ran: the CONDA ENVS section above is what was specified.
     for line in render_tool_versions((record.get("environment") or {}).get("tool_versions") or {}):
         add(line)
 
@@ -1009,7 +1009,7 @@ def main() -> int:
     parser.add_argument("--cached", default="0")
     parser.add_argument("--failed", default="0")
     parser.add_argument("--ignored", default="0")
-    # Accepted and ignored: the cache dir is no longer walked (audit C06/D08).
+    # Accepted and ignored: the cache dir is no longer walked.
     parser.add_argument("--conda-cache-dir", default="", help=argparse.SUPPRESS)
     # strict | warn; default: the launch record's --tool_version_check, else strict.
     parser.add_argument("--tool-version-check", choices=("strict", "warn"), default=None)
@@ -1044,17 +1044,17 @@ def main() -> int:
     launch_params = (record.get("invocation") or {}).get("params") or {}
     record["outputs"] = {
         "processes": processes,
-        # Digests of the cohort tables as they stand at the end of this launch (C06).
+        # Digests of the cohort tables as they stand at the end of this launch.
         "cohort_tables": output_checksums(launch_params),
-        # --extract_low_score_mapped, aggregated over the BAM/CRAM inputs (counts only; L8).
+        # --extract_low_score_mapped, aggregated over the BAM/CRAM inputs (counts only).
         "low_score_rescue": low_score_rescue_summary(launch_params),
-        # BAM/CRAM header provenance: reference fingerprints, aligner chains (counts only; X13).
+        # BAM/CRAM header provenance: reference fingerprints, aligner chains (counts only).
         "input_alignments": input_alignments_summary(launch_params),
-        # How each sample ended (terminal_state), counts only (audit X05/X06).
+        # How each sample ended (terminal_state), counts only.
         "sample_outcomes": sample_outcomes(launch_params),
     }
 
-    # Database releases and fingerprints, compared with conf/databases.tsv (X14).
+    # Database releases and fingerprints, compared with conf/databases.tsv.
     record["databases"] = database_versions(
         launch_params, (record.get("invocation") or {}).get("stages_requested"))
 
@@ -1065,7 +1065,7 @@ def main() -> int:
     if software:
         environment["software"] = software
 
-    # Runtime tool versions, read back from each task's work dir (K06/K07).
+    # Runtime tool versions, read back from each task's work dir.
     check = args.tool_version_check or launch_params.get("tool_version_check") or "strict"
     if check in ("null", "None"):
         check = "strict"

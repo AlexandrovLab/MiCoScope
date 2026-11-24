@@ -18,7 +18,7 @@ def main():
     if set(samples) != set(species_samples):
         raise ValueError("Bracken genus/species sample IDs differ")
     # Exclusions applied to every analysis table, on both entry routes: viruses (the existing
-    # consensus rule), and human and synthetic construct (Ludmil review #21; Ammal, 16 Nov 2026).
+    # consensus rule), and human and synthetic construct.
     # Human and vector reads are not microbes of the sample, so they are not analysis rows; they
     # stay visible in the QC summary's kraken_/bracken_ columns, and the raw per-sample Bracken
     # reports remain published unfiltered. The library totals below are computed AFTER these

@@ -31,12 +31,13 @@ shift || true
 
 # Pinned for reproducibility; the config is verified on 24.10.0 and 26.04.6 (nextflow.config).
 export NXF_VER="${NXF_VER:-24.10.0}"
-CONDA_BASE="${CONDA_BASE:-/tscc/projects/ps-lalexandrov/amabbasi/anaconda3}"
+CONDA_BASE="${CONDA_BASE:-$(conda info --base 2>/dev/null)}"
+[[ -n $CONDA_BASE ]] || { echo "set CONDA_BASE to your conda install"; exit 1; }
 NEXTFLOW="${NEXTFLOW:-$CONDA_BASE/envs/nf-env/bin/nextflow}"
 export JAVA_HOME="${JAVA_HOME:-$CONDA_BASE/envs/nf-env/lib/jvm}"
 export PATH="$JAVA_HOME/bin:$PATH"
 
-# No launcher env is activated (audit D09): Nextflow and Java come from the explicit nf-env
+# No launcher env is activated: Nextflow and Java come from the explicit nf-env
 # paths above, and every process gets its own conda env from conda_envs/lock/. The old
 # `conda activate microbiome` named an env no yml defines and aborted the job under set -e.
 

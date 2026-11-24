@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Input provenance from a BAM/CRAM header: which reference, which aligner chain (audit X13).
+"""Input provenance from a BAM/CRAM header: which reference, which aligner chain.
 
-Ludmil E3 / pksProfiler 70cb629 (scripts/header_provenance.py), adapted. A results tree could
+Ported from pksProfiler 70cb629 (scripts/header_provenance.py), adapted. A results tree could
 not say which human build each BAM/CRAM was aligned to, nor how. That matters for a microbiome
 read-out from unmapped reads: TCGA (GDC GRCh38.d1.vd1: hs38d1 decoys, chrEBV and ~200 viral
 contigs), Mutographs (1000G GRCh38 + decoys/HLA) and Hartwig (alt-masked GRCh38) differ in the

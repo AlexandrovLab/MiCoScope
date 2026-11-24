@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Record the version and path of every tool a task is about to run, and refuse to run one
-# that is not the pinned build from the task's own conda environment (audit K06/K07/X04;
-# ported from pksProfiler F16, commits 2bc7ca9 and 2c0f8c8).
+# that is not the pinned build from the task's own conda environment
+# (ported from pksProfiler, commits 2bc7ca9 and 2c0f8c8).
 #
 # RUN_REPORT's CONDA ENVS section lists what each lockfile SPECIFIES. It cannot see what ran.
 # CRC50 attempt 1 (Job 12380606) ran minimap2 2.24 from ~/.bashrc's tools/minimap2 in all 50

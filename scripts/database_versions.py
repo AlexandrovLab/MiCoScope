@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Database versions: what each reference database a run read actually was (audit X14).
+"""Database versions: what each reference database a run read actually was.
 
 "Path is not a version." lib/Provenance.groovy's data() digest (relative path, size and mtime to
 depth 3, truncated to 12 hex) is a -resume cache key, not something a reader can compare with a

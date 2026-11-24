@@ -16,11 +16,12 @@
 #  3. (batch correction: see the note at step 3 below; Nextflow builds it)
 # Lockfiles: conda_envs/lock/<env>.linux-64.txt  (`conda list --explicit --md5`)
 set -euo pipefail
-REPO=/tscc/lustre/restricted/alexandrov-ddn/users/shared/OncoBiomeProfiler-paper/workflow/CMPipeline
+REPO="${CMP_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CACHE=$REPO/.conda_cache
 LOCK=$REPO/conda_envs/lock
-STAGE=/tscc/lustre/restricted/alexandrov-ddn/users/amabbasi/cmp_env_build
-source /tscc/projects/ps-lalexandrov/amabbasi/anaconda3/etc/profile.d/conda.sh
+STAGE="${CMP_ENV_STAGE:?set CMP_ENV_STAGE to a scratch directory for the env build}"
+CONDA_BASE="${CONDA_BASE:?set CONDA_BASE to your conda install}"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
 export CONDA_CHANNEL_PRIORITY=strict
 # Never let ~/.local or a shell PYTHONPATH leak into the import checks (audit D13): job 12331453
 # failed because the HUMAnN env's metaphlan imported a broken ~/.local pandas.

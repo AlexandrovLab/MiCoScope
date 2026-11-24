@@ -12,20 +12,20 @@ process cohortReport {
     label 'process_low'
     publishDir("${params.qc_summary_dir}", mode: 'copy')
     conda "${params.consensus_taxa_env}"
-    // Re-rendered on every launch (audit C14): it reads THIS launch's provenance record, which a
+    // Re-rendered on every launch: it reads THIS launch's provenance record, which a
     // -resume would otherwise skip in favour of the report built from an earlier launch. Cheap.
     cache false
 
     input:
     path(qc_summary)
     path(validation_report)     // [] unless alignment validation ran
-    path(consensus_status)      // [] unless consensus ran (audit A09)
+    path(consensus_status)      // [] unless consensus ran
     path(decontam_evidence)     // Explicit current-run bundles; [] when decontamination did not run
     path(batch_evidence)        // One bundle per corrected rank; [] when batch correction did not run
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path("cmp_cohort_report.html"), emit: report
@@ -36,7 +36,7 @@ process cohortReport {
     def consensus_arg = consensus_status ? "--consensus-status \"${consensus_status}\"" : ""
     def batch_arg = batch_evidence ? batch_evidence.collect { "--batch-evidence \"${it}\"" }.join(" ") : ""
     // This launch's provenance record, by exact name (<sessionId>_<runName>.json under tracedir),
-    // not "newest file in the directory" (audit C14). Outside the work dir, so passed as a path.
+    // not "newest file in the directory". Outside the work dir, so passed as a path.
     def record = RunRecord.path(params.tracedir, "${workflow.sessionId}_${workflow.runName}")
     """
     set -euo pipefail

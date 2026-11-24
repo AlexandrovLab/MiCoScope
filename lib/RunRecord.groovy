@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter
 /**
  * The equivalence record, launch half: what code, what parameters, what references.
  *
- * Ported from pksProfiler (F16), which had the same gap: nothing tied the released
+ * Ported from pksProfiler, which had the same gap: nothing tied the released
  * source to the code that actually produced a cohort. Every run now writes one JSON
  * record per session at launch -- before any task runs, so a run that dies still says
  * what it was attempting. The outcome and the output digests are added afterwards by
@@ -22,7 +22,7 @@ import java.time.format.DateTimeFormatter
  * One record per launch, not one per results directory: with `-resume` a results tree
  * is usually the product of several launches, and the case that matters is exactly the
  * one where a later launch ran different code against the same tree. `-resume` reuses
- * the session id, so main.nf keys the record by "<sessionId>_<runName>" (audit C06).
+ * the session id, so main.nf keys the record by "<sessionId>_<runName>".
  */
 class RunRecord {
 
@@ -87,7 +87,7 @@ class RunRecord {
         // Upstream stages do not run for --start_from decontam / batch_correction.
         def fromStart = params.start_from == 'beginning'
         if (fromStart && !flags.skip_host_depletion) requested << 'host_depletion'
-        // BAM/CRAM low-score rescue request (L8); what each sample got is in the QC summary.
+        // BAM/CRAM low-score rescue request; what each sample got is in the QC summary.
         if (fromStart && !flags.skip_host_depletion) requested << "extract_low_score_mapped:${params.extract_low_score_mapped}".toString()
         if (fromStart && !flags.skip_classification) requested << 'classification'
         if (fromStart && !flags.skip_consensus)      requested << 'consensus'
@@ -97,14 +97,14 @@ class RunRecord {
         if (flags.run_decontam && params.start_from != 'batch_correction') requested << 'decontamination'
         if (flags.run_batch_correction) requested << 'batch_correction'
         if (fromStart && !flags.skip_host_depletion && params.pangenome_db) requested << 'pangenome_depletion'
-        if (flags.run_alignment_validation) requested << 'alignment_validation'   // audit C06
-        if (!flags.skip_cohort_report)  requested << 'cohort_report'              // audit C06
+        if (flags.run_alignment_validation) requested << 'alignment_validation'
+        if (!flags.skip_cohort_report)  requested << 'cohort_report'
         return requested
     }
 
     /**
      * The conda env spec of every stage this launch will run, keyed by parameter name
-     * (audit C06/D08). Values are the resolved params.*_env: a lockfile, a yml, or the
+     *. Values are the resolved params.*_env: a lockfile, a yml, or the
      * absolute prefix of a pre-built env (batch correction). The finaliser digests these
      * and reads the prefix env's conda-meta and R DESCRIPTIONs, instead of walking every
      * env in conda.cacheDir -- which lists stale envs and names them by an opaque hash.

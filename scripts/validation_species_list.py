@@ -33,7 +33,7 @@ def main(argv=None):
     samples, table = read_species_table(a.species_table)
     best = {}
     for clade, counts in table.items():
-        # Not candidates for a bacterial/archaeal/eukaryotic reference (audit B09): viruses (consensus
+        # Not candidates for a bacterial/archaeal/eukaryotic reference: viruses (consensus
         # drops them, but a pass-through or --skip_consensus table does not) and human, which is
         # already in the index as T2T under the Homo_sapiens label.
         if "Viruses" in clade or label_of(species_from_clade(clade)) == "Homo_sapiens":
@@ -56,7 +56,7 @@ def main(argv=None):
                 if n not in taxid:
                     taxid[n], canonical[n] = f[0], f[2]
                 elif taxid[n] != f[0]:
-                    ambiguous.add(n)   # two taxDB species share this label (audit B01)
+                    ambiguous.add(n)   # two taxDB species share this label
     # An ambiguous label gets no taxid rather than whichever came first in taxDB; the builder then
     # falls back to the name, and the species is flagged below.
     for n in ambiguous:

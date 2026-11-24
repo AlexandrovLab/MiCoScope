@@ -85,7 +85,7 @@ def stat_tiles(rows):
     gate = [r.get("cleared_consensus_gate") for r in rows]
     cleared = sum(1 for g in gate if g == "true")
     known = sum(1 for g in gate if g in ("true", "false"))
-    # BAM/CRAM samples enter QC with only their unmapped reads (audit C07), so "reads entering
+    # BAM/CRAM samples enter QC with only their unmapped reads, so "reads entering
     # QC" is not the library size. When extraction counts exist, show the library too.
     library = sum(num(r.get("library_primary_records"), 0) for r in rows)
     lib_retained = median([num(r.get("pct_retained_of_library")) for r in rows])
@@ -349,7 +349,7 @@ def validation_section(path):
 
 
 def consensus_banner(path):
-    """Say plainly which consensus mode ran; pass-through means no MetaPhlAn cross-check (A09)."""
+    """Say plainly which consensus mode ran; pass-through means no MetaPhlAn cross-check."""
     if not path or not path.is_file():
         return ""
     with path.open() as fh:

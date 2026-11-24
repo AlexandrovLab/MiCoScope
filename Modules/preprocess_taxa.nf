@@ -12,7 +12,7 @@ process process_metaphlan {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple path("merged_abundance_table.txt"), 
@@ -31,11 +31,11 @@ process process_metaphlan {
     ${ToolVersions.record(task, params, 'python3:python')}
     
     # Run the MetaPhlAn script to merge tables
-    find -L . -maxdepth 1 -name '*.profiled_metagenome.txt' -printf '%f\n' | sort > metaphlan_files.txt   # one argument, not one per sample (audit C15)
+    find -L . -maxdepth 1 -name '*.profiled_metagenome.txt' -printf '%f\n' | sort > metaphlan_files.txt   # one argument, not one per sample
     python3 "${params.scripts}/merge_metaphlan_tables.py" -l metaphlan_files.txt > merged_abundance_table.txt
     # Sample columns are named by merge_metaphlan_tables.py, which strips only the anchored
     # '.profiled_metagenome.txt' suffix. The unanchored sed passes that used to follow (on every
-    # line, taxon names included) are gone (audit C16).
+    # line, taxon names included) are gone.
 
 
     # Genus level
@@ -69,7 +69,7 @@ process process_bracken {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple path("bracken.genus.mpa.report.txt"),
@@ -88,7 +88,7 @@ process process_bracken {
     ${ToolVersions.record(task, params, 'python')}
 
     # File lists come from find (no per-file argv) and go in as ONE argument, so the merge does not
-    # hit ARG_MAX at cohort scale (audit C15). Sorted for a deterministic column order.
+    # hit ARG_MAX at cohort scale. Sorted for a deterministic column order.
     find -L . -maxdepth 1 -name '*.G.mpa.krakenreport.txt' -printf '%f\n' | sort > genus_files.txt
     find -L . -maxdepth 1 -name '*.S.mpa.krakenreport.txt' -printf '%f\n' | sort > species_files.txt
 
@@ -129,7 +129,7 @@ process consensus_taxa {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path "bracken.metaphlan.taxa.prop.pdf"

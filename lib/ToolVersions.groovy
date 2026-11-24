@@ -1,5 +1,5 @@
 /**
- * The runtime tool-version record (audit K06/K07/X04; ported from pksProfiler F16): one line at
+ * The runtime tool-version record: one line at
  * the top of every process that runs a tool from its conda environment.
  *
  *     ${ToolVersions.record(task, params, 'minimap2 samtools')}

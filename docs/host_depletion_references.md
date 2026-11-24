@@ -2,7 +2,7 @@
 
 `--hg38_db` and `--t2t_phix_db` are the two minimap2 indexes every run depletes against before
 anything is classified, so every CMPipeline count is what these two did not remove. On TSCC both are
-the shared files under `/tscc/projects/ps-lalexandrov/shared/CMPipeline_nextflow/dbs/`, the same two
+the lab's shared files (paths in `conf/tscc.config`), the same two
 files pksProfiler uses (except that CMPipeline's T2T pass also holds PhiX since 24 Nov 2026; see below). Both are rows in [`conf/databases.tsv`](../conf/databases.tsv), and every run
 records whether they are still the frozen files (*DATABASE VERSIONS* in `RUN_REPORT.txt`).
 
@@ -22,10 +22,10 @@ scaffolds. **Not** in it: hs38d1 decoys, chrEBV, HLA allele contigs, phiX.
 
 T2T-CHM13v2.0 (GCA_009914755.4, 25 sequences, 3,117,292,070 bp: chr1–22, X, Y (HG002) and the
 mitochondrion) **plus phiX174 (NC_001422.1, 5,386 bp)**: 26 sequences, 3,117,297,456 bp, indexed with
-`minimap2 -x sr` (2.31). Built by `audits/2026-11-24_t2t_phix/BUILD_T2T_PHIX.sbatch` (in the analysis
-tree, not the package): the T2T FASTA is md5-checked against NCBI's checksum file, PhiX is checked to be
-5,386 bp, the combined FASTA must have exactly 26 sequences and that length, and a self-test requires every
-150 bp tile of PhiX to map to NC_001422.1 (105 of 105). sha256 values are in `human-T2T-phiX-db.sha256`
+`minimap2 -x sr` (2.31). The FASTAs come from `scripts/download_references.sh` and the index from
+`scripts/create_minimap2_indexes.sh`. The TSCC build (24 Nov 2026) also
+checked the T2T FASTA's md5 against NCBI's checksum file, PhiX's length (5,386 bp), that the combined FASTA
+has exactly 26 sequences and that length, and that every 150 bp tile of PhiX maps to NC_001422.1 (105 of 105). sha256 values are in `human-T2T-phiX-db.sha256`
 beside the index; `conf/databases.tsv` freezes it.
 
 **Why it was rebuilt.** The earlier file, `human-GCA-phix-db.mmi` (2025-01-19), held the 25 T2T sequences
@@ -52,8 +52,8 @@ Identity, cheap (a few kB of each index; what `conf/databases.tsv` freezes as `m
 run does it. Integrity, expensive (reads the whole 9 GB file; run deliberately, not per run):
 
 ```
-sha256sum /tscc/projects/ps-lalexandrov/shared/CMPipeline_nextflow/dbs/human-GRC-db.mmi
-sha256sum /tscc/projects/ps-lalexandrov/shared/CMPipeline_nextflow/dbs/human-T2T-phiX-db.mmi   # compare with human-T2T-phiX-db.sha256
+sha256sum <db_dir>/human-GRC-db.mmi
+sha256sum <db_dir>/human-T2T-phiX-db.mmi   # compare with human-T2T-phiX-db.sha256
 ```
 
 ---

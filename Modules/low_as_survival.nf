@@ -1,8 +1,8 @@
 nextflow.enable.dsl=2
 
 /*
- * Per-stage survival of the reads the low-score rescue added (--extract_low_score_mapped; Ludmil
- * 1 Oct, L8). Runs only for BAM/CRAM samples whose rescue was on.
+ * Per-stage survival of the reads the low-score rescue added (--extract_low_score_mapped).
+ * Runs only for BAM/CRAM samples whose rescue was on.
  *
  * extractReads writes the rescued reads' names exactly as `samtools fastq -N` wrote them. Names
  * survive the rest of the chain unchanged: fastp keeps them, and mapReads's minimap2 -ax sr +
@@ -11,7 +11,7 @@ nextflow.enable.dsl=2
  * one TSV row, no name or sequence is written out.
  */
 process lowAsSurvival {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     label 'process_low'
     tag "$sampleID"
     publishDir("${params.qc_summary_dir}/low_as_survival", mode: 'copy')
@@ -21,7 +21,7 @@ process lowAsSurvival {
     // classified: KrakenUniq's classified FASTA, or an empty list when classification is skipped.
     tuple val(sampleID), path(low_as_ids), path(host_depleted), path(classified)
 
-    // Digests of the helper scripts this task uses (Provenance.code), as in the other modules (audit C03).
+    // Digests of the helper scripts this task uses (Provenance.code), as in the other modules.
     val deps
     output:
     path("${sampleID}.low_as_survival.tsv"), emit: counts

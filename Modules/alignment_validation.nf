@@ -5,8 +5,8 @@
 // Consensus asks whether two classifiers agreed; decontam asks whether the reagents put a taxon
 // there. This asks whether a taxon's reads actually come from its genome, and catches
 // misassignment: rRNA/plasmid pile-ups, reads of an absent relative, and "shadow" species that
-// only share reads with a real one. Design: DESIGN_alignment_validation.md (v2, 2026-09-23);
-// thresholds from the simulation benchmark in alignment_benchmark/RESULTS.md.
+// only share reads with a real one. Design and thresholds
+// (from a simulation benchmark on public genomes): docs/running/alignment_validation.md.
 //
 //   validationSpeciesList -> buildValidationRef (cached per species list)
 //     -> alignForValidation (batches of samples, one minimap2 run each) -> applyValidationMask
@@ -18,7 +18,7 @@
 nextflow.enable.dsl=2
 
 // RefSeq snapshot month for the validation reference: --validation_refseq_snapshot, else the month
-// this run started (decision 26). Both processes call it, so they always agree within a run.
+// this run started. Both processes call it, so they always agree within a run.
 def validationSnapshot() {
     params.validation_refseq_snapshot ?: workflow.start.toString().substring(0, 7)
 }
@@ -34,7 +34,7 @@ process validationSpeciesList {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     tuple env('REF_KEY'), path("validation_species.tsv"), emit: species
@@ -42,8 +42,8 @@ process validationSpeciesList {
     script:
     // Everything that determines the reference goes into its storeDir cache key: the species
     // (taxids, in the script), the build settings, and the builder/helper scripts' digests (deps).
-    // A changed builder or setting must not silently reuse an old reference (audit B04/C03).
-    // The RefSeq snapshot MONTH is in the key too (decision 26): within a month the cache is
+    // A changed builder or setting must not silently reuse an old reference.
+    // The RefSeq snapshot MONTH is in the key too: within a month the cache is
     // reused; a new month gets a new key and a fresh panel instead of silently replacing the old
     // one. Per-genome summary dates are in validation_reference_manifest.tsv.
     def settings = "max_genomes=${params.validation_max_genomes};ani=${params.validation_dedup_ani};" +
@@ -116,7 +116,7 @@ process buildValidationRef {
 process alignForValidation {
     tag "${sample_ids.size()} sample(s)"
     cpus 16
-    // Scales with the reference (audit B05). Benchmarked peak RSS = index size + ~9 GB (12 GB index ->
+    // Scales with the reference. Benchmarked peak RSS = index size + ~9 GB (12 GB index ->
     // 21 GB; 24 GB -> 32 GB), so request 1.2 x index + 12 GB, doubled per retry.
     // No Groovy (long) cast: the Nextflow 26 strict parser rejects it (caught by tests/integration).
     memory { Math.ceil(index.size() / 1e9 * 1.2 + 12).toLong().GB * task.attempt }
@@ -133,7 +133,7 @@ process alignForValidation {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path("*.validation_stats.tsv"), emit: stats
@@ -149,7 +149,7 @@ process alignForValidation {
     def groups_arg = groups ? "--groups \"${groups}\"" : ""
     def export_arg = params.validation_export_reads.toString() == 'true' ? "--export_reads" : ""
     def rescue_arg = params.validation_group_rescue_shared.toString() == 'true' ? "--group_rescue_shared" : ""
-    // Same rule as host depletion (E0): with -ax sr, minimap2 pairs adjacent mate-named reads, so the
+    // Same rule as host depletion: with -ax sr, minimap2 pairs adjacent mate-named reads, so the
     // result would depend on whether mates arrive interleaved (BAM route) or not (FASTQ route).
     def frag = params.host_depletion_frag.toString() == 'no' ? '--frag=no' : ''
     """
@@ -186,7 +186,7 @@ process applyValidationMask {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path("validated.species.tsv"), emit: species
@@ -217,7 +217,7 @@ process compareDecontamLevels {
 
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     path("decontam_species_vs_genus.tsv")

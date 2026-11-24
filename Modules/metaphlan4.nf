@@ -1,10 +1,10 @@
 nextflow.enable.dsl=2
 
 process metaphlan4 {
-    label 'per_sample'   // --sample_failure_strategy (audit C10)
+    label 'per_sample'   // --sample_failure_strategy
     label 'process_high'
     scratch true
-    // Intermediate read/alignment files are published only with --save_intermediates true (audit C11);
+    // Intermediate read/alignment files are published only with --save_intermediates true;
     publishDir "${params.metaphlan4_dir}", mode: 'copy', saveAs: { fn -> (params.save_intermediates.toString() == 'true' || !(fn =~ /\.(fastq|fq|fasta|fa|sam|bam|bowtie2\.bz2)(\.gz|\.bz2)?$/)) ? fn : null }
     conda "${Mpa.env(params)}"  // 4.1.1 or 4.2 by database (lib/Mpa.groovy)
 
@@ -13,7 +13,7 @@ process metaphlan4 {
  
     // Digests of the helper scripts / references this task uses (Provenance.code/.data). A val
     // input, so editing a script or swapping a reference invalidates -resume for exactly the
-    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23, audit C03).
+    // dependent tasks; embedding it in the script text does NOT (verified 2026-09-23).
     val deps
     output:
     // sampleID is carried so downstream steps can join this profile back to its
@@ -32,7 +32,7 @@ process metaphlan4 {
     def inputs = read_files.collect { "\"${it}\"" }.join(' ')
 
     """
-    # A failing stage inside a pipeline must fail the task (Ludmil review #22/#23). No pipe
+    # A failing stage inside a pipeline must fail the task. No pipe
     # exists in this script today; the switch protects whatever is added later.
     set -o pipefail
     # The [DEBUG] PATH / which / --version echo that was here is replaced by the tool-version record.
@@ -47,7 +47,7 @@ process metaphlan4 {
     # MetaPhlAn 4.2 renamed --bowtie2db to --db_dir and --bowtie2out to --mapout (the 4.2.x
     # binary rejects the old names: "unrecognized arguments", vJan26 arm, 22 Nov 2026).
     # --index, -s, -o, --nproc and --input_type are unchanged. Detect the dialect from the
-    # installed binary so one module serves 4.1 and 4.2 (review #15).
+    # installed binary so one module serves 4.1 and 4.2.
     if metaphlan --help 2>&1 | grep -q -- '--db_dir'; then
         DB_FLAG=--db_dir; MAP_FLAG=--mapout
     else

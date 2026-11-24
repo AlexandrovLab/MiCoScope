@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-NF_ENV = Path("/tscc/projects/ps-lalexandrov/amabbasi/anaconda3/envs/nf-env")
+NF_ENV = Path(os.environ.get("NF_ENV", "/nonexistent"))  # optional: a conda env with nextflow
 
 
 def find_nextflow():

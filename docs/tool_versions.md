@@ -15,7 +15,7 @@ Every conda environment runs from an exact lockfile (`conda_envs/lock/<env>.linu
 | metaphlan4_env | bowtie2 | 2.5.4 | 2.5.5 | Patch release; reads the same mpa_vJun23 index. |
 
 These match the versions pksProfiler adopted on 12 Oct 2026, after a 10-sample TCGA regression with 0 tier changes.
-**CMPipeline needs its own before/after regression on CRC50 before tagging** (see `audits/2026-10-26_toolbump/`).
+**CMPipeline needs its own before/after regression on CRC50 before tagging**; it is review item #8 and runs before the release is tagged.
 
 ## Deliberately frozen
 

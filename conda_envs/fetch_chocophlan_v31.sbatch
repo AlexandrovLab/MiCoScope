@@ -12,7 +12,7 @@
 # MetaPhlAn 4 profiles (audit D05; Ammal 2026-09-23). The existing v296_201901b (MetaPhlAn 3 era) is
 # left untouched. UniRef90 v201901b, already on disk, is the matching protein database.
 set -euo pipefail
-DB=/tscc/lustre/restricted/alexandrov-ddn/users/amabbasi/microbiome/databases/humann3
+DB="${HUMANN_DB_DIR:?set HUMANN_DB_DIR to the HUMAnN database directory}"
 URL=http://huttenhower.sph.harvard.edu/humann_data/chocophlan/full_chocophlan.v201901_v31.tar.gz
 OUT=$DB/chocophlan_v201901_v31
 mkdir -p "$OUT" && cd "$OUT"

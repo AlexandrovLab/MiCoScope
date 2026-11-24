@@ -1,7 +1,7 @@
 """ANI curation of the validation reference and the group-level fallback (decision 36, 26 Oct 2026).
 
 Synthetic only: ANI values are written by hand to mirror the Fusobacterium findings of 6 Oct 2026
-(audits/2026-10-06_fuso_ani/report.md); the scorer test builds SAM records in code.
+(docs/running/alignment_validation.md); the scorer test builds SAM records in code.
 """
 import csv, subprocess, sys, tempfile, unittest
 from pathlib import Path

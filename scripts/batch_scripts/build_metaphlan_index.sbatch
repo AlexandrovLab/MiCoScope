@@ -8,7 +8,7 @@ echo "conda env activated"
 echo "Bowtie2 version:"
 bowtie2 --version | head -1
 
-cd /tscc/lustre/restricted/alexandrov-ddn/users/l1joseph/CMPipeline/out/ref/metaphlan
+cd "${CMP_OUT_DIR:?set CMP_OUT_DIR to the directory that holds (or will hold) ref/}"/ref/metaphlan
 echo "cd metaphlan dir"
 
 echo "Decompressing .bz2 files..."

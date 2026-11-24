@@ -12,35 +12,26 @@
   Both take the sample sheet as `$1` and pass any further arguments to Nextflow. They
   run in `$SLURM_SUBMIT_DIR`, so they operate on the checkout you submit from.
 
-## Not safe to submit as they are
+## Run by hand
 
-The eleven other `*.sbatch` files here **have no `#SBATCH` directives at all** — they
-were stripped in commit `ca7b846` — and each one `cd`s into a hard-coded path under
-another user's directory.
+The six other `*.sbatch` files here are one-time setup jobs. They **have no `#SBATCH` directives**
+(stripped in commit `ca7b846`), so Slurm would apply its 1 hour default walltime and kill a
+download or index build partway; the right walltime and memory for each have not been measured.
+They take their working directory from an environment variable and stop if it is unset:
 
-Two consequences, both silent:
+| script | working directory |
+|---|---|
+| build_metaphlan_index.sbatch | `$CMP_OUT_DIR/ref/metaphlan` |
+| create_minimap2_indexes.sbatch | `$CMP_OUT_DIR` |
+| download_microbial_db.sbatch | `$CMP_OUT_DIR/ref` |
+| download_references.sbatch | `$CMP_OUT_DIR` |
+| unpack_microbial_dbs.sbatch | `$CMP_OUT_DIR/ref` |
+| run_consensus_taxa.sbatch | `$CMP_RUN_DIR` (a run directory with `scripts/` and `RESULTS/`) |
 
-1. No directives means Slurm applies the **1 hour default walltime**, so a database
-   download or index build is killed partway with `TIMEOUT` and a partial file on disk.
-2. The hard-coded `cd` means the job does its work in someone else's tree, or fails
-   at the `cd` if you cannot read it.
+Run them with explicit `sbatch` arguments, e.g.
 
-| script | `#SBATCH` directives | hard-coded foreign path |
-|---|---|---|
-| build_metaphlan_index.sbatch | 0 | yes |
-| create_minimap2_indexes.sbatch | 0 | yes |
-| download_microbial_db.sbatch | 0 | yes |
-| download_references.sbatch | 0 | yes |
-| run_consensus_taxa.sbatch | 0 | yes |
-| unpack_microbial_dbs.sbatch | 0 | yes |
-
-These are one-time setup jobs, so they have not been rewritten: the right walltime and
-memory for each needs measuring, not guessing. Until then, run them by hand with explicit
-`sbatch` arguments, e.g.
-
-    sbatch -A ddp302 -p platinum -q hcp-ddp302 -c 4 --mem 32G -t 24:00:00 \
+    CMP_OUT_DIR=/path/to/out sbatch -A <account> -p <partition> -q <qos> -c 4 --mem 32G -t 24:00:00 \
         --chdir "$PWD" scripts/batch_scripts/download_references.sbatch
 
-and check where the script `cd`s before you do. Directives added to these files must sit
-directly under the shebang — Slurm stops reading them at the first executable line.
-Validate with `sbatch --test-only`.
+Directives added to these files must sit directly under the shebang: Slurm stops reading them
+at the first executable line. Validate with `sbatch --test-only`.
