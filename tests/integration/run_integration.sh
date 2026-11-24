@@ -8,7 +8,7 @@
 #          consensus (Bracken pass-through), decontam on a 2-batch table, QC summary, MultiQC,
 #          cohort report.
 #   run B  --start_from decontam on a synthetic 12-sample, 2-batch table; batch correction too
-#          when the batch-correction env exists, expecting the loud "Insufficient samples" stop.
+#          when the batch-correction env exists, expecting a loud stop for too few samples.
 #
 # Usage: tests/integration/run_integration.sh <fixture_dir>
 #   NEXTFLOW=<nextflow>          default: nextflow on PATH
@@ -40,8 +40,8 @@ touch "$MARK"
 
 F="$FX/fixtures"
 if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
-    rm -rf "$F" "$FX/runA" "$FX/runB" "$FX/runC" "$FX/runD"
-    mkdir -p "$F" "$FX/runA" "$FX/runB" "$FX/runC" "$FX/runD"
+    rm -rf "$F" "$FX/runA" "$FX/runB" "$FX/runC" "$FX/runD" "$FX/runE"
+    mkdir -p "$F" "$FX/runA" "$FX/runB" "$FX/runC" "$FX/runD" "$FX/runE"
     if ! PATH="$SAMTOOLS_BIN:$MINIMAP2_BIN:$PATH" python3 "$HERE/make_fixtures.py" --outdir "$F" > "$FX/make_fixtures.log" 2>&1; then
         echo "FAIL  fixture generation (see $FX/make_fixtures.log)"
         exit 1
@@ -86,6 +86,16 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
             ${BATCH_ENV_ARGS[@]+"${BATCH_ENV_ARGS[@]}"} --batch_corr_covariates age_diag,sex,bmi ) > "$FX/runC/nextflow.stdout" 2>&1
         echo $? > "$FX/runC/exit_status"
         echo "INFO  run C exit $(cat "$FX/runC/exit_status")"
+        # run E: batch 2 = the batch-1 profiles at 3x depth -> the table must stay uncorrected.
+        echo "INFO  run E (--start_from decontam + batch correction, depth difference only) ..."
+        ( cd "$FX/runE" && "$NEXTFLOW" run "$REPO/main.nf" "${common[@]}" \
+            --start_from decontam --taxonomic_rank genus --outdir "$FX/runE/results" \
+            --consensus_otu_table "$F/depth/genus_table.tsv" \
+            --decontam_library_sizes "$F/depth/library_sizes.tsv" \
+            --metadata_file "$F/depth/metadata.tsv" --run_batch_correction true \
+            ${BATCH_ENV_ARGS[@]+"${BATCH_ENV_ARGS[@]}"} --batch_corr_covariates age_diag,sex,bmi ) > "$FX/runE/nextflow.stdout" 2>&1
+        echo $? > "$FX/runE/exit_status"
+        echo "INFO  run E exit $(cat "$FX/runE/exit_status")"
     fi
     # run D (audit C04): a covariate missing from the metadata must stop at LAUNCH, before any task.
     echo "INFO  run D (missing covariate, expect a launch-time stop) ..."
@@ -99,5 +109,5 @@ if [[ "${CMP_IT_SKIP_RUNS:-0}" != 1 ]]; then
 fi
 
 python3 "$HERE/check_outputs.py" --fixtures "$F" --run-a "$FX/runA" --run-b "$FX/runB" \
-    --run-c "$FX/runC" --run-d "$FX/runD" \
+    --run-c "$FX/runC" --run-d "$FX/runD" --run-e "$FX/runE" \
     --batch-correction "$(cat "$FX/runB/batch_correction" 2>/dev/null || echo off)"

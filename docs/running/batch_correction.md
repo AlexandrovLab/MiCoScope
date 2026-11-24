@@ -46,16 +46,17 @@ nextflow run main.nf -profile tscc --start_from batch_correction \
 remain in the sample status ledger with the reason. Tumor selection is not applied to
 any preceding decontamination step. For a separate genus table use `--taxonomic_rank genus`.
 
-**Mixed tissues:** use the same command with `--tumor_only false` and
-`--batch_corr_covariates "age_diag,sex,Sample Type_x"`, omitting the tumor-values option.
+**Mixed tissues:** use the same command with `--tumor_only false`, omitting the tumor-values option.
 This includes primary tumor and solid normal when present and otherwise eligible. Blood used
 as a decontamination control is left out by default; add `--downstream_include_controls true`
-only if the design analyses it on purpose. Tissue type is included in the model explicitly; it
-is not added automatically. If several sample types remain and the type column is not among the
-covariates, the run continues unchanged and records this as a note on every included sample in
-`batch_correction_sample_status.tsv`, `batch_correction_quality.tsv` (`sample_type_note`) and the
-cohort report, so that the user can decide. Keeping tissue type in the model does not prove that
-biological signals were preserved.
+only if the design analyses it on purpose. When several sample types remain and sample type is not
+among the covariates, it is added as the protected covariate `sample_type_protected` if every batch
+holds at least two types (`--batch_corr_protect_sample_type`, default `true`), unless a listed
+covariate already separates the types exactly. If a batch holds only one type, or protection is
+turned off, the run continues without it. Either way the choice is recorded on every included sample
+in `batch_correction_sample_status.tsv`, in `batch_correction_quality.tsv` (`sample_type_note`) and in
+the cohort report. Keeping tissue type in the model does not prove that biological signals were
+preserved.
 
 A missing requested column is an error. Missing values, unknown batches and all-zero count
 samples can exclude samples; read `batch_correction_sample_status.tsv`. Do not add invented
@@ -117,16 +118,14 @@ sample-type column whose name has no spaces to the metadata and list it in `--ba
 the automatic copy is then not added (the TCGA column `Sample Type_x` cannot be used in a model formula
 as is).
 
-## Additional comparisons are not automatic
+## Comparing settings
 
-The default report describes the current run. The optional filter/decontamination/batch/
-normalization sensitivity workflows are not implemented as a single
-validated comparison command yet. They remain TODO. Do not run them automatically or replace
-the baseline output. Before a requested comparison, specify the input and sample set,
-parameters/methods, repetitions/seed and separate output folders. Cost depends on which stages
-are rerun: evaluating saved matrices differs from rerunning classification or fitting every
-candidate. Runtime estimates require measurements of those stages; none are promised here.
-Changes in calls measure sensitivity, not contamination ground truth or biological accuracy.
+The cohort report describes one run. The pipeline has no single command that compares filter,
+decontamination, batch-correction or normalization settings. To compare settings, run each one on the
+same input table and samples, with the same seed, into its own output folder, and keep the default run
+as the baseline. Starting from a saved table (`--start_from decontam` or `batch_correction`) is much
+cheaper than rerunning classification. Differences between runs show how sensitive the calls are to a
+setting, not which result is correct.
 
 **No taxa to correct.** Before scheduling ConQuR, the pipeline checks each rank's table.
 A valid header-only table writes `empty_counts.csv` with the original sample columns,
@@ -188,7 +187,7 @@ plus the separately identified `adonis2-terms-v1` patch (conda build `r43_1`) an
 The patch replaces the four PERMANOVA scorer calls used by `Tune_ConQuR` with
 `adonis2(method="bray", permutations=999, by="terms")` and named R2 extraction.
 Sequential evaluation preserves the legacy selection definition; this is not a new
-criterion for biological signal preservation. Other ConQuR exports are not covered by this migration.
+criterion for biological signal preservation. Other exported ConQuR functions are not patched.
 The single-batch runtime guard still preserves original counts when a prevalence bin cannot be scored.
 Both upstream SHA and local patch identity are checked before the batch script runs and
 recorded in `batch_correction_run_settings.tsv` along with the actual vegan version.

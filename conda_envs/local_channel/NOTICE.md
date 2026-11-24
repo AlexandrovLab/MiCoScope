@@ -34,5 +34,5 @@ repository.
   Four scorer calls in `Tune_ConQuR` use `vegan::adonis2(method="bray", permutations=999, by="terms")`
   and named R2 extraction, preserving legacy sequential evaluation. `RemoteSha` still identifies
   upstream ff233085; `CMPipelinePatch` separately identifies our GPL-3 modification.
-  Other exported ConQuR functions are outside the pipeline's used tuning path and were not migrated.
+  Other exported ConQuR functions are outside the pipeline's used tuning path and are not patched.
   The runtime single-batch guard matches the patched expression exactly. Batch environment pins vegan2.6-10.
