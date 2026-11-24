@@ -45,7 +45,8 @@ on its next try. Sized from measured peak memory on TCGA CRC WGS where noted.
 | FastQC | `fastqc` | 4 | 4 GB | 8 h |
 | Host depletion (minimap2) | `mapReads` | 4 | 24 GB | 50 h |
 | KrakenUniq + Bracken | `process_high_disk` | 4 | 128 GB | 50 h |
-| MetaPhlAn 4, HUMAnN 3, batch correction | `process_high` | 16 | 256 GB | 50 h |
+| MetaPhlAn 4 | `process_high` + `withName: metaphlan4` | 16 | 64 GB (measured peak 41.6 GB on vJan26, 19.1 GB on vJun23) | 50 h |
+| HUMAnN 3, batch correction | `process_high` | 16 | 256 GB | 50 h |
 | Consensus, decontamination, merges, MultiQC | `process_medium` | 4 | 16 GB | 30 h |
 | Reports and small steps | `process_low` | 2 | 4 GB | 4 h |
 | Validation reference build | (fixed) | 16 | 96 GB | 12 h |
