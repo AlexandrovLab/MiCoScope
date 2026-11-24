@@ -451,6 +451,20 @@ workflow BATCH_CORRECTION {
     evidence = BatchCorrection.out.report_evidence.collect().ifEmpty([])
 }
 
+// Cohort report with its explicit current-run evidence, never a published-results search. Kept out of
+// the entry workflow, which Nextflow 24.10 limits to 65,535 characters (tests/test_repo_hygiene.py).
+workflow COHORT_REPORT {
+    take:
+    summary
+    validation
+    consensus
+    decontam
+    batch
+    main:
+    cohortReport(summary, validation, consensus, decontam, batch,
+                 depsOf(["${params.scripts}/build_cohort_report.py", "${params.scripts}/decontam_report.py", "${params.scripts}/batch_report.py"]))
+}
+
 workflow {
     // Resolved once: see BOOLEAN PARAMETER NORMALISATION above.
     def skipHostDepletion  = boolParam('skip_host_depletion', params.skip_host_depletion)
@@ -1300,6 +1314,7 @@ workflow {
         }
         Decontamination(ch_for_decontam, depsOf([params.decontam_script, "${params.scripts}/decontam_report_evidence.R", params.known_contaminants].findAll()))
         qcParts << Decontamination.out.decontaminated.map { it[3] }
+        Decontamination.out.report_evidence.collect().set { DECONTAM_REPORT_EVIDENCE }
         if (params.start_from == 'beginning' || params.taxonomic_rank == 'species') {
             aggregateDecontaminatedSpecies(Decontamination.out.for_batch_correction,
                 depsOf(["${params.scripts}/aggregate_decontaminated_species.py", "${params.scripts}/count_tables.py"]))
@@ -1410,16 +1425,17 @@ workflow {
         ].findAll { it }.join(',')
         qcSummary(qcChannel.collect(), qcStages, depsOf(["${params.scripts}/build_qc_summary.py", params.microbial_scope]))
 
-        // The report reads the summary table, not the results tree, so the two cannot
-        // disagree about what the run produced.
         if (!skipCohortReport) {
             // Optional inputs as value channels: [] when that stage did not run.
             if (!runValidation) { Channel.value([]).set { VALIDATION_MASK_REPORT } }
             if (!(params.start_from == 'beginning' && !skipClassification && !skipConsensus)) {
                 Channel.value([]).set { CONSENSUS_STATUS }
             }
-            cohortReport(qcSummary.out.summary, VALIDATION_MASK_REPORT, CONSENSUS_STATUS,
-                         depsOf(["${params.scripts}/build_cohort_report.py"]))
+            if (!(runDecontam && params.start_from != 'batch_correction')) {
+                Channel.value([]).set { DECONTAM_REPORT_EVIDENCE }
+            }
+            if (!runBatchCorrection) { Channel.value([]).set { BATCH_REPORT_EVIDENCE } }
+            COHORT_REPORT(qcSummary.out.summary, VALIDATION_MASK_REPORT, CONSENSUS_STATUS, DECONTAM_REPORT_EVIDENCE, BATCH_REPORT_EVIDENCE)
         }
     }
 
