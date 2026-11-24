@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cohort report: one self-contained HTML page summarising a CMPipeline run.
+"""Cohort report: one self-contained HTML page summarising a MiCoScope run.
 
 Reads the QC summary table (scripts/build_qc_summary.py) and, when present, the run
 provenance record plus explicitly supplied current-run evidence bundles.
@@ -506,10 +506,10 @@ def render(rows, record, qc_path, validation_report=None, consensus_status=None,
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CMPipeline cohort report</title>
+<title>MiCoScope cohort report</title>
 <style>{CSS}</style></head>
 <body><div class="wrap">
-<h1>CMPipeline cohort report</h1>
+<h1>MiCoScope cohort report</h1>
 <p class="sub">Generated {html.escape(generated)} · source <code>{html.escape(str(qc_path.name))}</code></p>
 {provenance_banner(record)}
 {stat_tiles(rows)}

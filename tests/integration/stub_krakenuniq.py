@@ -88,7 +88,7 @@ def main():
 
     walk(1, 0)
     with open(args.report_file, "w") as rep:
-        rep.write("# KrakenUniq stub for the CMPipeline integration test (synthetic data)\n")
+        rep.write("# KrakenUniq stub for the MiCoScope integration test (synthetic data)\n")
         rep.write("# CL: stub_krakenuniq.py\n\n")
         rep.write("%\treads\ttaxReads\tkmers\tdup\tcov\ttaxID\trank\ttaxName\n")
         for r in rows:

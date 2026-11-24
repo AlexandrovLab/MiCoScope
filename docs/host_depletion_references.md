@@ -1,9 +1,9 @@
 # What the host-depletion indexes contain
 
 `--hg38_db` and `--t2t_phix_db` are the two minimap2 indexes every run depletes against before
-anything is classified, so every CMPipeline count is what these two did not remove. On TSCC both are
+anything is classified, so every MiCoScope count is what these two did not remove. On TSCC both are
 the lab's shared files (paths in `conf/tscc.config`), the same two
-files pksProfiler uses (except that CMPipeline's T2T pass also holds PhiX since 24 Nov 2026; see below). Both are rows in [`conf/databases.tsv`](../conf/databases.tsv), and every run
+files pksProfiler uses (except that MiCoScope's T2T pass also holds PhiX since 24 Nov 2026; see below). Both are rows in [`conf/databases.tsv`](../conf/databases.tsv), and every run
 records whether they are still the frozen files (*DATABASE VERSIONS* in `RUN_REPORT.txt`).
 
 The contents below were read out of the index files themselves (their header and sequence dictionary)

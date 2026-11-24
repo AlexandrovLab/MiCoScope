@@ -661,7 +661,7 @@ class Wiring(unittest.TestCase):
             self.assertIn('"\\${REFERENCE_ARGS[@]}"', branch)
 
     def test_off_branch_is_the_pre_rescue_pipeline(self):
-        """Off, the extraction pipeline is the one CMPipeline ran before the rescue, verbatim."""
+        """Off, the extraction pipeline is the one MiCoScope ran before the rescue, verbatim."""
         before = [
             # the counter beside the tee is flagstat since review #12; the decode pipeline itself
             # is still the pre-rescue one, asserted verbatim below

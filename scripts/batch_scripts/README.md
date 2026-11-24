@@ -5,7 +5,7 @@
 - `main.sbatch` — launches the pipeline with `-profile tscc`
 - `resume_main.sbatch` — the same, kept under the name older notes use
 
-        cd <your CMPipeline checkout>
+        cd <your MiCoScope checkout>
         mkdir -p logs
         sbatch scripts/batch_scripts/main.sbatch samples.csv
 

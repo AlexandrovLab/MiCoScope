@@ -2,7 +2,7 @@
 # (scripts/251006_decontamination_ver2.R, `git show b6a2fab`; first in 599e206, 2025-07-17).
 # His script listed every name twice (spaced and underscored); this file holds each once, and
 # matching ignores the difference. His script used the list to label decontam plots only.
-# CMPipeline uses it as a FLAG (decontamination.R --known_contaminants): it never removes a taxon.
+# MiCoScope uses it as a FLAG (decontamination.R --known_contaminants): it never removes a taxon.
 # Source of the list is not recorded in his script.
 species
 Rhodococcus fascians

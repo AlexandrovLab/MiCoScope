@@ -869,7 +869,7 @@ def render(record: dict, processes: list[dict], software: dict[str, list[str]],
     bar = "=" * 78
 
     add(bar)
-    add(f"CMPipeline run report -- {record.get('status', '?').upper()}")
+    add(f"MiCoScope run report -- {record.get('status', '?').upper()}")
     add(bar)
     add(f"  session       {session}")
     add(f"  started       {run.get('started', '-')}")

@@ -1,6 +1,6 @@
 # Database manifest (audit X14; ported from pksProfiler c08098d conf/databases.tsv).
 #
-# The reference databases and indexes CMPipeline reads, frozen with a release label and a cheap
+# The reference databases and indexes MiCoScope reads, frozen with a release label and a cheap
 # fingerprint. scripts/database_versions.py recomputes the fingerprint at the end of every run for
 # the databases that run used (finalize_provenance.py), compares it with this file, and writes the
 # verdict (frozen / CHANGED: listing / CHANGED: key / not_in_manifest / unused) to RUN_REPORT.txt

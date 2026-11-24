@@ -295,7 +295,7 @@ class CommittedManifest(unittest.TestCase):
                          "fe43219f1104801e2a7e47a47209384def3fb312ef4e8a147c603c9135c9a8a6")
         self.assertEqual(self.rows["hg38_db"]["fingerprint"],
                          "92b1f812752bfe3097d302c0336cbb31135db729ab2361be5b30474fb43ab758")
-        # t2t_phix_db is no longer pksProfiler's file: CMPipeline's index adds PhiX (24 Nov 2026).
+        # t2t_phix_db is no longer pksProfiler's file: MiCoScope's index adds PhiX (24 Nov 2026).
         self.assertNotEqual(self.rows["t2t_phix_db"]["fingerprint"],
                             "8e2257962675aad5ef92adff8890084e51c77bc8e55e8b11b800d74ac3bfb196")
 

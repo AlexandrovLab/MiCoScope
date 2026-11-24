@@ -145,7 +145,7 @@ class ValidationSectionTests(unittest.TestCase):
 class DegradationTests(unittest.TestCase):
     def test_empty_cohort_does_not_crash(self):
         html = render([])
-        self.assertIn("CMPipeline cohort report", html)
+        self.assertIn("MiCoScope cohort report", html)
 
     def test_missing_depletion_explains_itself(self):
         row = sample_row()

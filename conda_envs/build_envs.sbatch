@@ -8,7 +8,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --output=build_envs-%j.log
 #
-# Builds CMPipeline's exact, locked conda environments (audit D01/D02/D03/D04, 2026-09-23).
+# Builds MiCoScope's exact, locked conda environments (audit D01/D02/D03/D04, 2026-09-23).
 # No data is touched. Run from anywhere:   sbatch conda_envs/build_envs.sbatch
 #
 #  1. envs whose yml did NOT change are locked from the build today's runs used (no rebuild)

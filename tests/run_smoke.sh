@@ -32,4 +32,4 @@ else
     echo 'Nextflow not found; skipped profile checks' >&2
 fi
 
-echo 'CMPipeline smoke checks passed'
+echo 'MiCoScope smoke checks passed'

@@ -2,6 +2,12 @@
 
 Not yet released; these are the changes since the last tagged state of `main`.
 
+- **The tool is renamed MiCoScope, and the repository moves to `AlexandrovLab/MiCoScope` (review #33).**
+  Names only; no run changes. Kept on purpose: the `CMPipelinePatch` field built into the patched ConQuR
+  package (renaming it means rebuilding that package), database directories on disk
+  (`.../CMPipeline_nextflow/dbs`), the `CMP_*` environment variables and the `cmp_cohort_report.html`
+  file name, so existing setups and scripts keep working.
+
 - **Code clean-up for release (reviews #30-#32); no run changes.** Internal audit, decision and plan
   tags are gone from the pipeline code, modules, scripts and lib comments (the rationale stays; the history
   is in this changelog). Personal paths and usernames are gone from scripts and tests: the one-time setup

@@ -1,6 +1,6 @@
-# Running CMPipeline on HPC systems
+# Running MiCoScope on HPC systems
 
-CMPipeline submits every process to the batch scheduler through a Nextflow executor profile. All compute
+MiCoScope submits every process to the batch scheduler through a Nextflow executor profile. All compute
 nodes must be able to read the repository, the inputs, the databases, the conda cache, the work directory
 and the output directory.
 
@@ -19,13 +19,13 @@ and the output directory.
 
 ```bash
 #!/usr/bin/env bash
-#SBATCH --job-name=cmpipeline-driver
+#SBATCH --job-name=micoscope-driver
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=3-00:00:00
 # every #SBATCH line directly under the shebang: directives after the first command are ignored
 
-nextflow run /path/to/CMPipeline/main.nf -profile slurm -c my-site.config \
+nextflow run /path/to/MiCoScope/main.nf -profile slurm -c my-site.config \
     --sample samples.csv --hg38_db /refs/human-GRC-db.mmi --t2t_phix_db /refs/human-T2T-phiX-db.mmi \
     --kraken_db /db/krakenuniq --metaphlan_db /db/metaphlan --run_decontam false -resume
 ```

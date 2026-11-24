@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cmpipeline-resume
+#SBATCH --job-name=micoscope-resume
 #SBATCH --account=ddp302
 #SBATCH --partition=platinum
 #SBATCH --qos=hcp-ddp302
@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=48:00:00
-#SBATCH --output=logs/cmpipeline-resume-%j.out
-#SBATCH --error=logs/cmpipeline-resume-%j.err
+#SBATCH --output=logs/micoscope-resume-%j.out
+#SBATCH --error=logs/micoscope-resume-%j.err
 
 # Every #SBATCH directive must stay above the first executable line -- Slurm stops
 # reading them at that point, and the job silently inherits the 1 h default walltime.
@@ -19,7 +19,7 @@
 # as separate Slurm jobs by -profile tscc. 4 cpus / 16 GB is for the head process.
 #
 # Usage:
-#   cd <your CMPipeline checkout>
+#   cd <your MiCoScope checkout>
 #   mkdir -p logs
 #   sbatch scripts/batch_scripts/resume_main.sbatch <sample_sheet.csv> [extra nextflow args]
 #

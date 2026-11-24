@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Executed integration test for CMPipeline (audit C22). Unlike -preview and the unit tests, this
+# Executed integration test for MiCoScope (audit C22). Unlike -preview and the unit tests, this
 # RUNS the real main.nf, locally, on synthetic data only (random bases; see make_fixtures.py):
 #
 #   run A  --start_from beginning: BAM + CRAM (with a synthetic reference) + paired FASTQ x2 +
@@ -33,7 +33,7 @@ BATCH_ENV_ARGS=()
 # Only ever wipe a directory this script created (marker file), never an arbitrary path.
 MARK="$FX/.cmp_integration_fixture"
 if [[ -n "$(ls -A "$FX" 2>/dev/null)" && ! -e "$MARK" ]]; then
-    echo "FAIL  fixture dir is not empty and not a CMPipeline integration fixture dir: $FX" >&2
+    echo "FAIL  fixture dir is not empty and not a MiCoScope integration fixture dir: $FX" >&2
     exit 1
 fi
 touch "$MARK"

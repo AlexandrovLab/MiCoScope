@@ -1,13 +1,13 @@
-# CMPipeline
+# MiCoScope
 
-**CMPipeline** is a Nextflow pipeline for cancer-microbiome profiling of whole-genome sequencing. It
+**MiCoScope** is a Nextflow pipeline for cancer-microbiome profiling of whole-genome sequencing. It
 removes host reads from BAM, CRAM or FASTQ input, classifies what remains with KrakenUniq/Bracken and
 MetaPhlAn 4, keeps the taxa both profilers agree on, and can optionally confirm species by alignment,
 remove reagent contaminants, correct batch effects and profile function with HUMAnN 3.
 
 ## How it works
 
-<img src="workflow_logo/v0.4.png" width="900" alt="CMPipeline workflow: (a) read preparation and host depletion, (b) taxonomic profiling with KrakenUniq, Bracken and MetaPhlAn 4 and cross-profiler genus consensus, (c) optional functional profiling with HUMAnN 3, (d) optional alignment validation, (e) reagent decontamination, (f) optional batch correction with ConQuR, and the outputs">
+<img src="workflow_logo/v0.4.png" width="900" alt="MiCoScope workflow: (a) read preparation and host depletion, (b) taxonomic profiling with KrakenUniq, Bracken and MetaPhlAn 4 and cross-profiler genus consensus, (c) optional functional profiling with HUMAnN 3, (d) optional alignment validation, (e) reagent decontamination, (f) optional batch correction with ConQuR, and the outputs">
 
 1. **Read preparation** extracts every primary unmapped read from BAM/CRAM input, plus low-score mapped
    reads when the aligner was `bwa mem -T` below 30 (or takes single- or paired-end FASTQ), and filters the
@@ -38,11 +38,11 @@ a provenance record of the exact code, parameters, databases and environments us
 - Conda or Mamba. Nextflow builds each tool's environment from its exact lockfile in
   `conda_envs/lock/` on first use.
 
-### 2. Clone CMPipeline
+### 2. Clone MiCoScope
 
 ```bash
-git clone https://github.com/ammalabbasi/CMPipeline.git
-cd CMPipeline
+git clone https://github.com/AlexandrovLab/MiCoScope.git
+cd MiCoScope
 ```
 
 ### 3. Databases
@@ -66,7 +66,7 @@ sources and licenses: `conda_envs/local_channel/NOTICE.md`). The checkout path m
 letters, digits and `. _ / + -`.
 See the [batch-correction guide](docs/running/batch_correction.md).
 
-## Running CMPipeline
+## Running MiCoScope
 
 ### Sample sheet
 
