@@ -4,6 +4,24 @@ Not yet released; these are the changes since the last tagged state of `main`.
 
 **Correctness fixes that change results** — read these before comparing against older output.
 
+- **Host depletion now removes PhiX (reviews #47, #37). Results change for libraries with a PhiX
+  spike-in.** The T2T index never held PhiX: `scripts/download_references.sh` concatenated a phiX file
+  it never downloaded. PhiX reads then reached KrakenUniq as synthetic construct: in CRC50 they were 91%
+  of the reads matching UniVec (whole reads, identity 1.000), concentrated in one sequencing centre
+  where synthetic construct was ~98.5% of classified reads. The new index `human-T2T-phiX-db.mmi`
+  (T2T-CHM13v2.0 + phiX174 NC_001422.1, 26 sequences; self-test 105/105 PhiX tiles map to PhiX) is the
+  TSCC `--t2t_phix_db` and is frozen in `conf/databases.tsv`; the download script now fetches PhiX and
+  stops if it cannot. The cohort report labels the pass "T2T-CHM13 + PhiX". See
+  `docs/host_depletion_references.md`.
+
+- **MetaPhlAn requests 64 GB, doubling on retry, instead of 256 GB (review #29).** Measured peaks:
+  19.1 GB with MetaPhlAn 4.1.1 + vJun23, 41.6 GB with 4.2.6 + vJan26 (a 32 GB request was
+  out-of-memory). Other high-memory tasks keep 256 GB. Scheduling only; results do not change.
+
+- **Validation flags large Bracken calls with little alignment support (review #3).** New
+  `low_support_flag` in the validation stats: "yes" when the Bracken estimate is at least 1,000 reads and
+  supporting reads are under 1% of it. A flag only: statuses, masks and counts are unchanged.
+
 - **MetaPhlAn now defaults to the vJan26 database with MetaPhlAn 4.2.6; HUMAnN runs switch to
   vJun23 (review #15). MetaPhlAn profiles change.** On the 10-sample comparison the newer database
   gave the same gate decisions, near-identical richness (median 32.5 vs 33 species) and the same

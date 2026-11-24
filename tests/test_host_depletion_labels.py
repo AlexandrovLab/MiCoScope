@@ -26,9 +26,8 @@ STALE = re.compile(r"contains\s+\*{0,2}no\s+phi\s*X|no\s+phi\s*X\s+despite", re.
 
 class Labels(unittest.TestCase):
     def test_cohort_report_stage_label(self):
-        # Still the T2T-only wording; it becomes "T2T-CHM13 + PhiX" once the cohort-report PR lands.
         labels = {key: label for key, label, _ in CR.STAGES}
-        self.assertEqual(labels["pct_removed_t2t_phix"], "Removed: T2T-CHM13")
+        self.assertEqual(labels["pct_removed_t2t_phix"], "Removed: T2T-CHM13 + PhiX")
 
     def test_no_file_still_says_the_index_lacks_phix(self):
         offenders = []
