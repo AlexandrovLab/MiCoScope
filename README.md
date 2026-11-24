@@ -123,7 +123,7 @@ The main options. [`docs/parameters.md`](docs/parameters.md) lists all of them.
 | `--consensus_min_reads` | `100000` | No | microbial reads (bacteria + archaea + fungi + protozoa, see `--microbial_scope`) a sample needs for MetaPhlAn (and HUMAnN) |
 | `--run_decontam` | `true` | No | decontamination; needs `--metadata_file` + role parameters |
 | `--metadata_file` | TSV/CSV path | With decontam or batch correction | per-sample metadata |
-| `--taxonomic_rank` | `genus`, `species` | With decontam or batch correction | the rank of a supplied table (`--start_from decontam` / `batch_correction`); species-first runs decontaminate species and correct both species and genus |
+| `--taxonomic_rank` | `genus`, `species` | With decontam or batch correction | the rank of a supplied table (`--start_from decontam` / `batch_correction`); a full run with decontamination needs `species` (`genus` stops at launch). Species-first runs decontaminate species and correct both species and genus |
 | `--cohort_preset` | `tcga` | No | the TCGA sample-role contract in one flag |
 | `--control_role`, `--positive_values`, `--control_values` | see guide | With decontam (unless `--cohort_preset`) | which samples are material and which are controls |
 | `--run_alignment_validation` | `false` | No | alignment validation of species calls |

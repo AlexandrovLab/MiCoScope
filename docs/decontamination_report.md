@@ -14,12 +14,10 @@ The default HTML receives an explicit report bundle from the same Decontaminatio
 
 ## Why these rules, and what they cannot show
 
-The existing prevalence method compares detection in configured controls and positives. The configured threshold determines per-batch calls; requiring calls in multiple batches seeks recurring evidence but can miss single-batch contamination. This reporting change does not establish an optimal threshold or validate the control choice. Defaults remain unchanged. The score histogram is descriptive, not an FDR estimate; no automatic multiple-testing correction is applied.
+The existing prevalence method compares detection in configured controls and positives. The configured threshold determines per-batch calls; requiring calls in multiple batches seeks recurring evidence but can miss single-batch contamination. The report does not establish an optimal threshold or validate the control choice. Defaults remain unchanged. The score histogram is descriptive, not an FDR estimate; no automatic multiple-testing correction is applied.
 
 Setting sensitivity, depth-matched repeated resampling, alternative-mode evaluation (including `isNotContaminant`) and false-discovery calibration are not performed by this reporter. They require separate study design and adequate controls. The report labels them not assessed. Retention means the specified rules did not remove a taxon, not that it is known to be uncontaminated. A valid-empty table is a valid processing result, not evidence that a sample contains no microbes.
 
 ## Evidence and integrity
 
 Each `*.decontam_report/` contains stage_flow.tsv, taxon_ledger.tsv, batch_type_summary.tsv, taxon_detection.tsv, the existing sample/batch/taxon decision tables, final count matrix, and manifest.tsv. The manifest records software/settings/input identities, blacklist identity and each evidence file's hash. The Python renderer checks hashes, cohort denominators, stage losses, source ledger decisions and final totals before producing HTML. A supplied incomplete/inconsistent bundle fails rendering; a legacy invocation with no bundle explicitly reports evidence unavailable.
-
-This covers what a single run reports. It does not cover repeated stability tests, alternative mode assessment, batch-correction quality reporting, full cohort validation or release/deployment.
