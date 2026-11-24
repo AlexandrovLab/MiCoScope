@@ -298,7 +298,7 @@ def main():
             sys.exit(f"ERROR: {tool} not on PATH")
 
     out = Path(args.outdir).resolve()
-    for sub in ("ref", "db/kraken", "db/metaphlan", "samples", "decontam", "batch"):
+    for sub in ("ref", "db/kraken", "db/metaphlan", "samples", "decontam", "batch", "depth"):
         (out / sub).mkdir(parents=True, exist_ok=True)
     rng = random.Random(args.seed)
 
@@ -474,7 +474,10 @@ def main():
 
     # ---- run C (audit C22): enough samples for ConQuR (>= 20 after decontam) -- 2 batches x 14
     # (12 positive, 2 control) -- with a real batch shift (batch 2 counts x3 on half the genera)
-    # and covariates that vary within each batch, so batch correction must actually CORRECT.
+    # and covariates that vary within each batch, so batch correction must actually CORRECT. The
+    # covariates repeat the same values in each batch, and BMI is not proportional to age: rising across
+    # all 28 samples they tracked batch (r = 0.9) and the batch term, tested after them, was not
+    # significant; with BMI exactly proportional to age, ConQuR left the table unchanged.
     samples_c = [f"bc_{b}_{i}" for b in ("b1", "b2") for i in range(14)]
     roles_c = {s: ("Blood" if s.endswith(("_12", "_13")) else "Tumor") for s in samples_c}
     counts_c = {}
@@ -497,9 +500,35 @@ def main():
         with open(out / "batch" / name, "w") as fh:
             fh.write("sampleid\tsample_type\tshipment_batch\t" + "\t".join(cols) + "\n")
             for i, s in enumerate(samples_c):
-                vals = {"age_diag": str(35 + 2 * i), "sex": "FM"[i % 2], "bmi": f"{20.0 + 0.5 * i:.1f}"}
+                k = i % 14
+                vals = {"age_diag": str(35 + 2 * k), "sex": "FM"[k % 2], "bmi": f"{20.0 + 0.5 * ((5 * k + 3) % 14):.1f}"}
                 fh.write(f"{s}\t{roles_c[s]}\t{s.split('_')[1]}\t" + "\t".join(vals[c] for c in cols) + "\n")
     expected["batch_run_c"] = {"samples": len(samples_c), "batches": 2}
+
+    # ---- run E: depth difference only. Batch 2 holds the batch-1 profiles at three times the depth
+    # (same composition, same covariates), so the decision on relative abundances must leave the table
+    # uncorrected; Bray on raw counts would read the depth gap as a batch effect.
+    samples_e = [f"dp_{b}_{i}" for b in ("b1", "b2") for i in range(14)]
+    roles_e = {s: ("Blood" if s.endswith(("_12", "_13")) else "Tumor") for s in samples_e}
+    base_e = {(g, k): (rng.randint(50, 500) if k < 12 or rng.random() < 0.3 else 0)
+              for g in genera[:-1] for k in range(14)}
+    counts_e = {(g, s): base_e[(g, int(s.rsplit("_", 1)[1]))] * (3 if s.startswith("dp_b2") else 1)
+                for g in genera[:-1] for s in samples_e}
+    with open(out / "depth/genus_table.tsv", "w") as fh:
+        fh.write("clade_name\t" + "\t".join(samples_e) + "\n")
+        for g in genera[:-1]:
+            fh.write(lineage + g + "\t" + "\t".join(str(counts_e[(g, s)]) for s in samples_e) + "\n")
+    with open(out / "depth/library_sizes.tsv", "w") as fh:
+        fh.write("sample\tbracken_genus_total\tbracken_species_total\n")
+        for s in samples_e:
+            tot = sum(counts_e[(g, s)] for g in genera[:-1]) + 5000
+            fh.write(f"{s}\t{tot}\t{tot}\n")
+    with open(out / "depth/metadata.tsv", "w") as fh:
+        fh.write("sampleid\tsample_type\tshipment_batch\tage_diag\tsex\tbmi\n")
+        for s in samples_e:
+            k = int(s.rsplit("_", 1)[1])
+            fh.write(f"{s}\t{roles_e[s]}\t{s.split('_')[1]}\t{35 + 2 * k}\t{'FM'[k % 2]}\t{20.0 + 0.5 * ((5 * k + 3) % 14):.1f}\n")
+    expected["depth_run_e"] = {"samples": len(samples_e), "batches": 2}
 
     (out / "expected.json").write_text(json.dumps(expected, indent=2) + "\n")
     print(f"fixtures: {len(SAMPLES)} pipeline samples, {len(samples_b)} decontam samples -> {out}")

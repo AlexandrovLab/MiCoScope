@@ -239,9 +239,12 @@ def run_b(fx, run, expected, batch_correction):
         return
     if batch_correction == "on":
         # 12 samples < the 20 run_auto_phase needs: ConQuR must refuse loudly, never pass raw
-        # counts off as corrected (audit A01).
+        # counts off as corrected (audit A01). With the 4 blood controls left out of batch correction
+        # (the default), 4 tumours per batch are below the per-batch minimum, so the stop can also come
+        # earlier, at cohort selection.
         check("B: exit status non-zero (batch correction must fail on 12 samples)", code not in (0, None), f"exit={code}")
-        check("B: failure names 'Insufficient samples'", log_has(run, "Insufficient samples"))
+        check("B: failure says too few samples ('Insufficient samples' or 'No eligible samples')",
+              log_has(run, "Insufficient samples") or log_has(run, "No eligible samples after batch-cohort selection"))
         check("B: no ConQuR_tuned.tsv published", not list((res / "05_BATCH_CORRECTION").rglob("ConQuR_tuned.tsv"))
               if (res / "05_BATCH_CORRECTION").exists() else True)
     else:
@@ -273,6 +276,23 @@ def run_c(fx, run, expected, batch_correction):
     check("C: no UNCORRECTED_passthrough.tsv", not sorted(run.glob("results/**/UNCORRECTED_passthrough.tsv")))
 
 
+def run_e(fx, run, batch_correction):
+    """Depth only: batch 2 holds the batch-1 profiles at three times the depth, so the decision on
+    relative abundances must keep the table uncorrected and never write a ConQuR table."""
+    if batch_correction != "on":
+        print("SKIP  E: batch-correction env not available")
+        return
+    check("E: exit status 0", exit_status(run) == 0, f"exit={exit_status(run)}")
+    status = sorted(run.glob("results/05_BATCH_CORRECTION/**/BATCH_CORRECTION_STATUS.tsv"))
+    rows = read_tsv(status[0]) if status else []
+    check("E: BATCH_CORRECTION_STATUS says uncorrected_no_batch_effect",
+          bool(rows) and rows[0].get("status") == "uncorrected_no_batch_effect",
+          f"status={rows[0].get('status') if rows else None}")
+    check("E: no ConQuR_tuned.tsv", not sorted(run.glob("results/05_BATCH_CORRECTION/**/ConQuR_tuned.tsv")))
+    check("E: UNCORRECTED_by_decision.tsv written",
+          bool(sorted(run.glob("results/05_BATCH_CORRECTION/**/UNCORRECTED_by_decision.tsv"))))
+
+
 def run_d(fx, run):
     """Audit C04: a missing covariate stops at launch and is named; no task runs."""
     check("D: launch-time stop (non-zero exit)", exit_status(run) not in (None, 0), f"exit={exit_status(run)}")
@@ -288,6 +308,7 @@ def main():
     ap.add_argument("--batch-correction", choices=["on", "off"], default="off")
     ap.add_argument("--run-c", default=None)
     ap.add_argument("--run-d", default=None)
+    ap.add_argument("--run-e", default=None)
     args = ap.parse_args()
     expected = json.loads((Path(args.fixtures) / "expected.json").read_text())
     run_a(Path(args.fixtures), Path(args.run_a), expected)
@@ -296,6 +317,8 @@ def main():
         run_c(Path(args.fixtures), Path(args.run_c), expected, args.batch_correction)
     if args.run_d:
         run_d(Path(args.fixtures), Path(args.run_d))
+    if args.run_e:
+        run_e(Path(args.fixtures), Path(args.run_e), args.batch_correction)
     failed = results.count(False)
     print(f"SUMMARY  {len(results) - failed} passed, {failed} failed, {len(results)} assertions")
     raise SystemExit(min(failed, 255))

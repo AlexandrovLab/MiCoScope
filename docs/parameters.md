@@ -52,7 +52,7 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--batch_corr_allow_uncorrected` | `false` | a failed correction stops the run. `true` continues with the raw counts, published as `corrected/UNCORRECTED_passthrough.tsv`, never under a corrected name |
 | `--conqur_sha` | `ff233085…` | the ConQuR commit the script was written against; any other install is refused |
 | `--taxon_column` | `clade_name` | taxonomy column in the OTU table; every other column is a sample |
-| `--taxonomic_rank` | `null` | **required when decontamination or batch correction runs**: `genus` or `species`. It names the rank of a table you supply (`--consensus_otu_table`, `--decontam_otu_table`). A full run, or `--start_from decontam` with a species table, decontaminates species, sums the surviving species to genus, and batch-corrects **both** ranks |
+| `--taxonomic_rank` | `null` | **required when decontamination or batch correction runs**: `genus` or `species`. It names the rank of a table you supply (`--consensus_otu_table`, `--decontam_otu_table`); a full run with decontamination needs `species` (`genus` stops at launch). A full run, or `--start_from decontam` with a species table, decontaminates species, sums the surviving species to genus, and batch-corrects **both** ranks |
 | `--sample_id_column` | `sampleid` | metadata column holding the sample IDs |
 | `--unselected_type_policy` | `error` | `error` (default) stops on a sample whose type is in neither role list; `exclude` drops it |
 | `--cohort_preset` | `null` | `tcga` sets the TCGA role contract (type column `Sample Type_x`, positives Primary Tumor + Solid Tissue Normal, controls Blood Derived Normal) |
