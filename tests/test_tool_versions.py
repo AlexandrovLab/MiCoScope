@@ -44,9 +44,9 @@ SPEC = importlib.util.spec_from_file_location("finalize_provenance", REPO / "scr
 FP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FP)
 
-# Processes with a conda env that deliberately do not record. antiSMASH belongs to the separate
-# run_antismash.nf entry point (its own params; not part of main.nf).
-EXEMPT = {"antiSMASH": "separate entry point run_antismash.nf, not part of main.nf"}
+# Processes with a conda env that deliberately do not record. None since the antiSMASH entry point
+# was removed (review #35).
+EXEMPT = {}
 
 GUARD = ('unset LD_LIBRARY_PATH LIBRARY_PATH CPATH PYTHONHOME PERL5LIB R_LIBS R_LIBS_USER R_LIBS_SITE; '
          'if command -v conda >/dev/null 2>&1; then export PATH="$(conda info --base)/bin:$PATH"; fi')

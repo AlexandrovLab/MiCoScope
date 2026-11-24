@@ -29,14 +29,9 @@ Two consequences, both silent:
 |---|---|---|
 | build_metaphlan_index.sbatch | 0 | yes |
 | create_minimap2_indexes.sbatch | 0 | yes |
-| download_gtdb_checkm2.sbatch | 0 | yes |
 | download_microbial_db.sbatch | 0 | yes |
 | download_references.sbatch | 0 | yes |
-| repair_pairs.sbatch | 0 | yes |
-| repair_pairs_large.sbatch | 0 | yes |
-| run_antismash.sbatch | 0 | yes |
 | run_consensus_taxa.sbatch | 0 | yes |
-| run_mag.sbatch | 0 | yes |
 | unpack_microbial_dbs.sbatch | 0 | yes |
 
 These are one-time setup jobs, so they have not been rewritten: the right walltime and

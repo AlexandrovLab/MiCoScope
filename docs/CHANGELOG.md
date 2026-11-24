@@ -2,6 +2,12 @@
 
 Not yet released; these are the changes since the last tagged state of `main`.
 
+- **MAG and antiSMASH modules removed (review #35).** `Modules/antismash.nf`, `Modules/run_antismash.nf`,
+  `conf/mag.config`, `conf/antismash.config`, `conda_envs/antismash_env.yml`, the nf-core/mag helper jobs
+  (`run_mag`, `download_gtdb_checkm2`, `repair_pairs`, `repair_pairs_large`, `run_antismash`) and
+  `scripts/repair_pairs.py`, with the unused `--antismash_dir` / `--antismash_env` parameters. `main.nf`
+  never called any of them, so no run changes. They remain in git history for a future, tested version.
+
 **Correctness fixes that change results** — read these before comparing against older output.
 
 - **Host depletion now removes PhiX (reviews #47, #37). Results change for libraries with a PhiX

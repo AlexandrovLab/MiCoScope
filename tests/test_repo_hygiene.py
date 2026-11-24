@@ -24,9 +24,8 @@ NF_SOURCES = [REPO / "main.nf", *sorted((REPO / "Modules").glob("*.nf"))]
 CONFIGS = [REPO / "nextflow.config", *sorted((REPO / "conf").glob("*.config"))]
 
 # conf/*.config that configure a DIFFERENT pipeline (run via `-c` from a batch script), so their
-# params are not CMPipeline params. mag.config -> nf-core/mag (run_mag.sbatch);
-# antismash.config -> run_antismash.nf (run_antismash.sbatch).
-FOREIGN_CONFIGS = {"mag.config", "antismash.config"}
+# params are not CMPipeline params. None since the MAG/antiSMASH configs were removed (review #35).
+FOREIGN_CONFIGS = set()
 
 PARAM_ENV_RE = re.compile(r"params\.(\w+_env)\s*=\s*[\"']([^\"']+)[\"']")
 

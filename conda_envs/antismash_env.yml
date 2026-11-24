@@ -1,6 +1,0 @@
-name: nf-antismash-env
-channels:
-  - bioconda
-dependencies:
-  - antismash=7.*
-  - python=3.10

@@ -98,7 +98,6 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--consensus_taxa_dir` | ``--outdir`/CONSENSUS_TAXA` | where `CONSENSUS_TAXA/` is published; defaults to `CONSENSUS_TAXA` under `--outdir` |
 | `--decontam_dir` | ``--outdir`/04_DECONTAMINATION` | where `04_DECONTAMINATION/` is published; defaults to `04_DECONTAMINATION` under `--outdir` |
 | `--batch_corr_dir` | ``--outdir`/05_BATCH_CORRECTION` | where `05_BATCH_CORRECTION/` is published; defaults to `05_BATCH_CORRECTION` under `--outdir` |
-| `--antismash_dir` | `conda_envs/antismash_env.yml`, `ANTISMASH/` | reserved for the antiSMASH module in `Modules/antismash.nf`, which `main.nf` does not currently call |
 | `--validation_dir` | ``--outdir`/06_VALIDATION` | where `06_VALIDATION/` is published; defaults to `06_VALIDATION` under `--outdir` |
 | `--run_alignment_validation` | `false` | turn the lane on |
 | `--validation_min_support` | `25` | reads on the best genome for a species to be listed, and for a sample x species to be scored at all |
@@ -161,7 +160,6 @@ Paths and values are validated before the first task runs. The run-mode guides i
 | `--validation_env` | `conda_envs/lock/<env>.linux-64.txt` | the locked conda environment for each tool |
 | `--batch_corr_env` | the batch lockfile with the repository's local channel (built by Nextflow) | optional: a pre-built prefix instead, e.g. from `scripts/setup_batch_env.sh` |
 | `--batch_corr_seed` | `1` | RNG seed for batch correction; hold allocated CPUs and environment fixed for repeat comparisons |
-| `--antismash_env` | `conda_envs/antismash_env.yml`, `ANTISMASH/` | reserved for the antiSMASH module in `Modules/antismash.nf`, which `main.nf` does not currently call |
 | `--batch_corr_method` | `tune` | `tune` (auto-phased Tune_ConQuR) or `vanilla` (default ConQuR settings). Nothing else is accepted: ComBat is not implemented |
 
 ## Script Paths

@@ -193,7 +193,6 @@ params.humann3_dir = "${params.outdir}/HUMANN3"
 params.consensus_taxa_dir = "${params.outdir}/CONSENSUS_TAXA"
 params.decontam_dir = "${params.outdir}/04_DECONTAMINATION"
 params.batch_corr_dir = "${params.outdir}/05_BATCH_CORRECTION"
-params.antismash_dir = "${params.outdir}/ANTISMASH"
 params.validation_dir = "${params.outdir}/06_VALIDATION"
 
 // ============================================================================
@@ -281,7 +280,6 @@ params.validation_env = "${projectDir}/conda_envs/lock/validation_env.linux-64.t
 // (file name includes a content digest; the checkout path may contain only [A-Za-z0-9._/+-]).
 // --batch_corr_env <prefix> still selects a pre-built env instead.
 params.batch_corr_env = BatchEnv.lockfile(projectDir, workflow.workDir)
-params.antismash_env = "${projectDir}/conda_envs/antismash_env.yml"
 params.batch_corr_method = "tune"  // ConQuR mode: "tune" (auto-phased Tune_ConQuR) or "vanilla"
 
 
